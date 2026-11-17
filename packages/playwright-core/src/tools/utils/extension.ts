@@ -17,10 +17,18 @@
 import fs from 'fs';
 import path from 'path';
 
-// Also pinned via the "key" field in packages/extension/manifest.json.
-export const playwrightExtensionId = 'mmlmfjhmonkocbjadbfplnigmagldckm';
+// The official extension ID is pinned in Microsoft's manifest. CAIOS development
+// builds use a separate ID, supplied ONLY to the compatible forked MCP client.
+// Do not silently attach a different Chrome profile or bypass per-tab approval.
+const officialExtensionId = 'mmlmfjhmonkocbjadbfplnigmagldckm';
+const selectedExtensionId = process.env.CAIOS_PLAYWRIGHT_EXTENSION_ID;
+if (selectedExtensionId && !/^[a-p]{32}$/.test(selectedExtensionId))
+  throw new Error('CAIOS_PLAYWRIGHT_EXTENSION_ID must be a 32-character Chrome extension ID.');
+export const playwrightExtensionId = selectedExtensionId || officialExtensionId;
 
-export const playwrightExtensionInstallUrl = `https://chromewebstore.google.com/detail/playwright-extension/${playwrightExtensionId}`;
+export const playwrightExtensionInstallUrl = selectedExtensionId
+  ? 'https://github.com/Tokenkauph/caios-chrome-extension/blob/main/packages/extension/CAIOS.md'
+  : `https://chromewebstore.google.com/detail/playwright-extension/${officialExtensionId}`;
 
 export async function findPlaywrightExtensionProfile(userDataDir: string): Promise<string | undefined> {
   const profiles = await listProfileDirectories(userDataDir);
