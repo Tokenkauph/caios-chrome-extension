@@ -17,6 +17,7 @@
 import * as z from 'zod';
 import { defineTool } from './tool';
 import { renderTabsMarkdown } from './response';
+import { settleWithin } from './caiosBoundedTab';
 
 const browserTabs = defineTool({
   capability: 'core-tabs',
@@ -37,7 +38,9 @@ const browserTabs = defineTool({
   handle: async (context, params, response) => {
     switch (params.action) {
       case 'list': {
-        await context.ensureTab();
+        // A pre-existing tab can stall during initialization (including prerendered tabs).
+        // Continue with already-announced tabs rather than hang the entire MCP call.
+        await settleWithin(context.ensureTab(), 4_000);
         break;
       }
       case 'new': {
@@ -60,7 +63,19 @@ const browserTabs = defineTool({
         break;
       }
     }
-    const tabHeaders = await Promise.all(context.tabs().map(tab => tab.headerSnapshot()));
+    const tabHeaders = await Promise.all(context.tabs().map(async tab => {
+      // Reading a title through CDP may hang for an otherwise-open tab.
+      // Preserve the URL and index so the user can still select an approved tab.
+      const header = await settleWithin(tab.headerSnapshot(), 3_000);
+      return header ?? {
+        title: '[title unavailable]',
+        url: tab.page.url(),
+        current: tab.isCurrentTab(),
+        crashed: tab.crashed,
+        console: { total: 0, warnings: 0, errors: 0 },
+        changed: true,
+      };
+    }));
     const result = renderTabsMarkdown(tabHeaders);
     response.addTextResult(result.join('\n'));
   },
