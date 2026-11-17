@@ -19,6 +19,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Button, ListItem, PageHeader, TabItem } from './tabItem';
 import { getOrCreateAuthToken } from './authToken';
+import { reconcileSelection } from './selection';
 import * as icons from './icons';
 
 import type { CandidateGroup, Candidates, PageMessage, Selection, SessionOptions } from '../types';
@@ -50,7 +51,7 @@ function relayUrlError(relayUrl: string | null): string | undefined {
   try {
     const host = new URL(relayUrl).hostname;
     if (host !== '127.0.0.1' && host !== '[::1]')
-      return `Playwright extension only allows loopback connections (127.0.0.1 or [::1]). Received host: ${host}`;
+      return `CAIOS only accepts local browser connections (127.0.0.1 or [::1]). Received host: ${host}`;
   } catch (e) {
     return `Invalid mcpRelayUrl parameter in URL: ${relayUrl}. ${e}`;
   }
@@ -62,17 +63,59 @@ function protocolVersionError(): Status | undefined {
   if (requestedVersion > SUPPORTED_PROTOCOL_VERSION)
     return { type: 'error', versionMismatch: { extensionVersion: chrome.runtime.getManifest().version } };
   if (requestedVersion < SUPPORTED_PROTOCOL_VERSION)
-    return { type: 'error', message: 'The client uses an unsupported protocol version. Update Playwright MCP or CLI to the latest version.' };
+    return { type: 'error', message: 'This CAIOS browser client uses an incompatible protocol. Update the matching CAIOS client and extension together.' };
 }
 
 const ConnectApp: React.FC = () => {
   const [status, setStatus] = useState<Status | null>(null);
   const [candidates, setCandidates] = useState<Candidates | null>(null);
   const [selection, setSelection] = useState<Selection>({});
+  const [refreshing, setRefreshing] = useState(false);
+
+  const refreshCandidates = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      const response = await chrome.runtime.sendMessage<PageMessage>({ type: 'getCandidates' });
+      if (!response?.success)
+        throw new Error(response?.error || 'Unable to read available tabs.');
+      const available = response as Candidates;
+      setCandidates(available);
+      setSelection(previous => reconcileSelection(previous, available));
+      setStatus({ type: 'connecting', message: 'Tabs are up to date. Choose the tabs you want CAIOS to use.' });
+    } catch (error) {
+      setStatus({ type: 'error', message: `Unable to refresh tabs: ${String(error)}` });
+    } finally {
+      setRefreshing(false);
+    }
+  }, []);
+
+  // The consent picker stays live if the user opens or closes a tab after this page appears.
+  // Debouncing avoids extra work during page loads; no extra tab is authorized automatically.
+  useEffect(() => {
+    if (!candidates || status?.type !== 'connecting')
+      return;
+    let pending: ReturnType<typeof setTimeout> | undefined;
+    const scheduleRefresh = () => {
+      if (pending)
+        clearTimeout(pending);
+      pending = setTimeout(() => void refreshCandidates(), 300);
+    };
+    chrome.tabs.onCreated.addListener(scheduleRefresh);
+    chrome.tabs.onUpdated.addListener(scheduleRefresh);
+    chrome.tabs.onRemoved.addListener(scheduleRefresh);
+    return () => {
+      if (pending)
+        clearTimeout(pending);
+      chrome.tabs.onCreated.removeListener(scheduleRefresh);
+      chrome.tabs.onUpdated.removeListener(scheduleRefresh);
+      chrome.tabs.onRemoved.removeListener(scheduleRefresh);
+    };
+  }, [!!candidates, status?.type, refreshCandidates]);
 
   const connect = useCallback(async (selection: Selection) => {
     setCandidates(null);
-    setStatus({ type: 'connecting', message: 'Selection approved. Establishing the local relay and attaching the selected tab…' });
+    const started = performance.now();
+    setStatus({ type: 'connecting', message: 'Selection approved. Connecting CAIOS to the chosen tab…' });
     // Only surface progress locally; do not log tab content, local relay URLs or authentication tokens.
     const slowNotice = setTimeout(() => {
       setStatus({
@@ -83,7 +126,7 @@ const ConnectApp: React.FC = () => {
     try {
       const response = await chrome.runtime.sendMessage<PageMessage>({ type: 'connect', options, selection });
       if (response?.success)
-        setStatus({ type: 'connected', message: `"${options.clientName}" connected. Verify the actual tab title and URL in the Playwright client.` });
+        setStatus({ type: 'connected', message: `CAIOS connected in ${((performance.now() - started) / 1000).toFixed(1)}s after approval. Verify the chosen tab in your CAIOS client.` });
       else
         setStatus({ type: 'error', message: `Connection or selected-tab attachment failed: ${response?.error || 'unknown error'}` });
     } catch (error) {
@@ -114,9 +157,7 @@ const ConnectApp: React.FC = () => {
         setStatus({ type: 'connecting', message: 'Local connection request received. Loading available tabs…' });
         const token = params.get('token');
         if (!token) {
-          const available = await chrome.runtime.sendMessage<PageMessage>({ type: 'getCandidates' });
-          setCandidates(available);
-          setStatus({ type: 'connecting', message: 'Choose the intended tab and approve this connection.' });
+          await refreshCandidates();
           return;
         }
       // With a token, this page becomes the blank tab of the client; keep the token out of its history.
@@ -135,7 +176,7 @@ const ConnectApp: React.FC = () => {
     // The service worker holds the pending request and stops after 30s without messages.
     const keepalive = setInterval(() => void chrome.runtime.sendMessage<PageMessage>({ type: 'keepalive' }).catch(() => {}), 20_000);
     return () => clearInterval(keepalive);
-  }, [connect]);
+  }, [connect, refreshCandidates]);
 
   const toggleGroup = (groupId: number) => setSelection(selection.groupId === groupId ? {} : { groupId });
   const toggleTab = (tabId: number) => {
@@ -146,7 +187,7 @@ const ConnectApp: React.FC = () => {
   return (
     <div className='page'>
       <PageHeader>
-        <a className='page-header-link' href='manage.html' target='_blank' rel='noreferrer'>Manage clients</a>
+        <a className='page-header-link' href='manage.html' target='_blank' rel='noreferrer'>Manage CAIOS connections</a>
       </PageHeader>
       <div className='card'>
         {status && <StatusBanner status={status} />}
@@ -159,14 +200,14 @@ const ConnectApp: React.FC = () => {
                 Allowing this connection exposes the entire browser to the client,
                 including any signed-in sessions, cookies, and content in other tabs and windows.
                 Once approved, the client may also be able to reconnect later without showing this dialog again,
-                unless you rotate the token on the <a href='manage.html' target='_blank' rel='noreferrer'>Manage clients</a> page and then restart the browser.
+                unless you rotate the token on the <a href='manage.html' target='_blank' rel='noreferrer'>Manage CAIOS connections</a> page and then restart the browser.
               </div>
             </div>
 
             {candidates && <>
               <div className='muted'>
-                Select one tab group or some tabs for the client.
-                {options.tabGroup && <> You can drag more tabs into the tab group of the client later.</>}
+                Choose the exact tab to share with CAIOS. This list updates when tabs open or close.
+                {options.tabGroup && <> You can drag more tabs into the tab group later.</>}
               </div>
               {candidates.groups.length > 0 && (
                 <div>
@@ -205,7 +246,10 @@ const ConnectApp: React.FC = () => {
         {candidates && (
           <div className='card-footer'>
             <div className='muted'>{selectionSummary(selection)}</div>
-            <Button variant='primary' onClick={() => connect(selection)}>Allow</Button>
+            <Button variant='default' disabled={refreshing} onClick={() => void refreshCandidates()}>{refreshing ? 'Refreshing…' : 'Refresh tabs'}</Button>
+            <Button variant='primary' disabled={refreshing} onClick={() => void connect(selection)}>
+              {selection.groupId !== undefined || selection.tabIds?.length ? 'Allow selected tabs' : 'Connect blank tab'}
+            </Button>
           </div>
         )}
       </div>
@@ -248,13 +292,12 @@ const GroupItem: React.FC<{ group: CandidateGroup, checked: boolean, onClick: ()
 };
 
 const VersionMismatchError: React.FC<{ extensionVersion: string }> = ({ extensionVersion }) => {
-  const readmeUrl = 'https://github.com/microsoft/playwright/blob/main/packages/extension/README.md';
-  const chromeWebStoreUrl = 'https://chromewebstore.google.com/detail/playwright-extension/mmlmfjhmonkocbjadbfplnigmagldckm';
+  const readmeUrl = 'https://github.com/Tokenkauph/caios-chrome-extension/blob/main/packages/extension/CAIOS.md';
   return (
     <div>
-      Playwright client trying to connect requires newer extension version (current version: {extensionVersion}).{' '}
-      Update <a href={chromeWebStoreUrl} target='_blank' rel='noopener noreferrer'>Playwright Extension</a> from the Chrome Web Store to the latest version.{' '}
-      See <a href={readmeUrl} target='_blank' rel='noopener noreferrer'>installation instructions</a> for more details.
+      The CAIOS browser client needs a newer CAIOS Chrome Extension (installed version: {extensionVersion}).{' '}
+      Reload the matching CAIOS extension after installing a verified update.{' '}
+      See <a href={readmeUrl} target='_blank' rel='noopener noreferrer'>CAIOS installation instructions</a> for details.
     </div>
   );
 };

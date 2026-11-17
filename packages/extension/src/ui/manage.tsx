@@ -66,7 +66,7 @@ const ManageApp: React.FC = () => {
   return (
     <div className='page'>
       <PageHeader />
-      <h2 className='section-title'>Connected clients</h2>
+      <h2 className='section-title'>Active CAIOS connections</h2>
       {connections.map(connection => (
         <div className='card connection' key={connection.id}>
           <div className='card-header'>
@@ -86,7 +86,7 @@ const ManageApp: React.FC = () => {
       {!connections.length && (
         <div className='card'>
           <div className='status-banner empty'>
-            No clients are connected. To connect a client, start the Playwright CLI or the Playwright MCP server with the --extension flag.
+            No CAIOS browser tasks are connected. Start a CAIOS browser task, then approve the tabs you want it to access.
           </div>
         </div>
       )}

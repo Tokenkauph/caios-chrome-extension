@@ -31,10 +31,10 @@ export const AuthTokenSection: React.FC<{}> = ({}) => {
   return (
     <div className='card'>
       <div className='card-header'>
-        <h2 className='card-title'>Token</h2>
+        <h2 className='card-title'>Advanced connection token</h2>
       </div>
       <div className='card-body'>
-        <div className='muted'>A client that has this token connects without the connection dialog. Set this environment variable for the client:</div>
+        <div className='muted'>Optional advanced setting. A compatible client with this token can connect without showing the usual approval dialog. Keep it private; normal tab selection does not need it.</div>
         <div className='auth-token-container'>
           <code className='auth-token-code'>{authTokenCode(authToken)}</code>
           <CopyToClipboard value={authTokenCode(authToken)} />
