@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "CAIOS Chrome Extension",
-  "version": "0.5.0.2",
+  "version": "0.5.0.3",
   "description": "Connect CAIOS to Chrome tabs you choose, helping it read pages, navigate websites and fill forms during approved tasks.",
   "permissions": [
     "debugger",
@@ -33,5 +33,5 @@
     "128": "icons/icon-128.png"
   },
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA8i9BdHGEywFqIbuJQxQSC5jcI/dV1IALDXAZEvU9OkT6PNdXxd4L9N9ZXamx9E1doBD9I4RIahQ8kDucdjjSOSPQtSq61Y81NakwF4kZWpPZhe5K8fHzNcHoc4yNJx2Mk7b0d7LfJI3PNU8iKJRPVoJGcQqAYBKV558tcqxVHAI8ZLPC9utHfpysBPD239rqIZlL57K4T72fipTxIGfFOfixyKqsh2+/zKrBf5otqj8C3Rn4U4IJnNZ++a3KI96/MNFcMcjj+IJu1C7yL+86PKPiVdsO/6K7qO5QY6CMBHGh4pCy6qugbTXFs4bGlDI8Kv/yDdtEkK4CR4S8kJOqtQIDAQAB",
-  "version_name": "0.5.0-CAIOS.2"
+  "version_name": "0.5.0-CAIOS.3"
 }
