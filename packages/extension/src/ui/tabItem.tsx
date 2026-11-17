@@ -17,13 +17,14 @@
 import React from 'react';
 import * as icons from './icons';
 
-export const Button: React.FC<{ variant: 'primary' | 'default'; onClick: () => void; children: React.ReactNode }> = ({
+export const Button: React.FC<{ variant: 'primary' | 'default'; onClick: () => void; disabled?: boolean; children: React.ReactNode }> = ({
   variant,
   onClick,
+  disabled,
   children
 }) => {
   return (
-    <button className={`button ${variant}`} onClick={onClick}>
+    <button className={`button ${variant}`} onClick={onClick} disabled={disabled}>
       {children}
     </button>
   );
