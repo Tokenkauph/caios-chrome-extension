@@ -59,14 +59,32 @@ export class ConnectionBroker {
     const relayUrl = this._relayUrls.get(connectTabId);
     if (!relayUrl)
       throw new Error('Pending client connection closed');
+    // A browser click is already consent for this exact connection. Retry a
+    // transient local relay race once, without asking the human to click again.
+    // Never change relay URLs, select another tab, or create a new session.
+    let channel: Channel | undefined;
+    try {
+      for (let attempt = 0; attempt < 2; ++attempt) {
+        try {
+          channel = await Channel.open(relayUrl);
+          break;
+        } catch (error) {
+          if (attempt === 1)
+            throw error;
+          await new Promise(resolve => setTimeout(resolve, 250));
+        }
+      }
+    } catch {
+      // A failed relay is not a completed tab attachment. Release only the
+      // request's reservation; the user may start a fresh consent session.
+      this._relayUrls.delete(connectTabId);
+      this._registry.unreserve(connectTabId);
+      this._didChangeActivity();
+      throw new Error('MCP relay unavailable after automatic retry; no tab attached. Check the task client before starting another connection.');
+    }
     this._relayUrls.delete(connectTabId);
     this._registry.unreserve(connectTabId);
-
-    const channel = await Channel.open(relayUrl).catch(error => {
-      this._didChangeActivity();
-      throw error;
-    });
-    const session = new ClientSession(channel, this._registry, options);
+    const session = new ClientSession(channel!, this._registry, options);
     const sessionId = ++this._lastSessionId;
     this._sessions.set(sessionId, session);
     this._didChangeActivity();

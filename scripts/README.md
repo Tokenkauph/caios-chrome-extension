@@ -24,6 +24,7 @@ Plan JSON, authored for a **specific already authorized** task:
   "extension_id": "kanpfbepfgcpmjoeaaihigjkcdjejbld",
   "expected_title": "Google",
   "expected_url_prefix": "https://www.google.com/",
+  "restore_original_url": false,
   "steps": [
     {"name": "inspect", "tool": "browser_evaluate",
      "arguments": {"function": "() => ({title:document.title,url:location.href})"}}
@@ -45,8 +46,8 @@ python3 scripts/caios_approved_browser_task.py \
   --stderr-log /path/to/task-owned-stderr.log
 ~~~
 
-The runner requires the **forked CAIOS MCP** and exact extension ID, not the official Microsoft MCP. It clears the shortcut approval token from its child environment; no stored token or cross-profile bypass. It verifies the machine, profile selection and exactly one matching returned title/URL before any action. All actions are preapproved, and optional finally_steps handle in-scope recovery if a step fails. Console events report steps and timings but not page contents. Keep task-owned stderr logs private, because they can contain connection details.
+The runner requires the **forked CAIOS MCP** and exact extension ID, not the official Microsoft MCP. It clears the shortcut approval token from its child environment; no stored token or cross-profile bypass. It verifies the machine, chooses exactly one approved tab index, explicitly selects that tab, and independently verifies it is active before executing any primary action. Set `restore_original_url: true` only for a task that explicitly authorizes restoring the starting tab URL; the runner captures the URL and conditionally restores it after known outcomes, then runs any `finally_steps` checks. If an MCP call never answers, the page state is unknown and conflicting restoration is skipped. On a returned navigation error the runner checks the actual destination and DOM readiness before deciding whether the action succeeded. Separate primary/cleanup counts, phase timings, stable redacted connection errors and accurate failure events are reported without echoing private page content. Keep task-owned stderr logs private, because they can contain connection details.
 
 **Timeout distinction:** the 900-second setting is a **task-side** waiting budget and does not change Chrome consent expiration or OpenAI's tool lifetimes. Progress every 15 seconds is not an event delivered independently to ChatGPT; the host-side runner proceeds immediately on actual MCP tab return. No standing daemon or background scheduler is installed.
 
-**Tests:** python3 -m unittest discover -s tests/caios -p test_approved_browser_task.py -v tests immediate preloaded action after fake consent, host/tab rejection, and periodic wait/timeout. This does not prove a new production signed-in browser acceptance or measured speed gain. Preserve the accepted v0.5.0.2 extension and Microsoft extension as installed.
+**Tests:** `python3 -m unittest discover -s tests/caios -p test_approved_browser_task.py -v` verifies prearmed execution, actual Playwright tab-list format, unique explicit selection, known versus unanswered navigation, conditional restore, failure reporting and process/relay exit. `node --test tests/caios/*.test.mjs` includes the existing ten CAIOS tests and the bounded broker retry tests. Browser/extension full integration and signed-in six-step acceptance are separate later checks. The production v0.5.0.2 CAIOS extension and original Microsoft extension remain installed until an authorized replacement is independently verified.
