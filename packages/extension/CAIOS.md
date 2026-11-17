@@ -76,6 +76,12 @@ For an existing **unpacked** installation, replace the extension's local icon fi
 
 **Repeatable operational sequence:** Verify machine → Chrome profile directory → **open the target tab before connecting** → start the CAIOS forked client with explicit correct extension ID/profile → user selects the exact already-present tab in the fresh CAIOS approval window → verify returned URL/title → authorized reads/scrolls and, if requested, exactly one write → independently verify generated reply → disconnect task-owned client while leaving the user's Chrome tabs open.
 
+## Tool-wide approval priority (all conversations and profiles)
+
+**Mandatory for every CAIOS Chrome browser task:** prepare the host/profile/tab and all authorized actions **before** requesting consent; when the approved tab is returned, execute immediately without another chat message or unrelated GitHub/status/tool work. Never waste an approval interval on documentation. A user report of clicking approval is valid feedback, but the attached browser handle must still be verified. If it stalls, show progress and troubleshoot promptly.
+
+The reusable [CAIOS approval-priority task runner](../../scripts/README.md) provides deterministic preplanned browser operations with a **900-second task-side approval wait** (rather than the temporary benchmark's 180 seconds), **15-second status updates**, exact machine/profile/tab verification, immediate same-process execution and task cleanup. For dynamic interactive tasks retain the single authorized MCP connection and perform next scoped actions before other work. This is host-side execution, not a native ChatGPT callback, and source alone does not install the runner.
+
 ## CAIOS 0.5.0.2 candidate — consent picker refresh and plain-English listing
 
 **Release status: source and test candidate only; not yet installed in any signed-in Chrome profile.** The previously accepted installed RStires unpacked extension was version `0.5.0.1`. Test and review this code before replacing its files or clicking Reload.
