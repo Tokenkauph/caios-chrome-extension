@@ -1,3 +1,11 @@
+# CAIOS Chrome Extension — development fork
+
+This repository is [CAIOS Engineering](https://github.com/Tokenkauph/caios/issues/201)'s public fork of [Microsoft Playwright](https://github.com/microsoft/playwright), licensed under Apache-2.0. The Chrome extension is in `packages/extension`; the companion MCP tab-list fallback is in `packages/playwright-core/src/tools/backend`. The original Playwright project and license are retained below.
+
+**Current status:** source-only prototype; CAIOS-branded extension and improved connection diagnostics build successfully. A best-effort MCP tab-enumeration timeout fallback has focused tests. **The original ChatGPT existing-tab failure is not yet reproduced or confirmed fixed by this fork.** No fork build is installed in the user's signed-in Chrome profiles or registered as a native ChatGPT Tool. See [CAIOS fork operating notes](packages/extension/CAIOS.md) before installing or changing the extension ID.
+
+---
+
 # 🎭 Playwright
 
 [![npm version](https://img.shields.io/npm/v/playwright.svg)](https://www.npmjs.com/package/playwright) <!-- GEN:chromium-version-badge -->[![Chromium version](https://img.shields.io/badge/chromium-159.0.8154.6-blue.svg?logo=google-chrome)](https://www.chromium.org/Home)<!-- GEN:stop --> <!-- GEN:firefox-version-badge -->[![Firefox version](https://img.shields.io/badge/firefox-159.0-blue.svg?logo=firefoxbrowser)](https://www.mozilla.org/en-US/firefox/new/)<!-- GEN:stop --> <!-- GEN:webkit-version-badge -->[![WebKit version](https://img.shields.io/badge/webkit-27.2-blue.svg?logo=safari)](https://webkit.org/)<!-- GEN:stop --> [![Join Discord](https://img.shields.io/badge/join-discord-informational)](https://aka.ms/playwright/discord)

@@ -33,7 +33,7 @@ export const PageHeader: React.FC<{ children?: React.ReactNode }> = ({ children 
   return (
     <header className='page-header'>
       <img className='page-logo' src='icons/icon-48.png' alt='' />
-      <h1 className='page-title'>Playwright Extension</h1>
+      <h1 className='page-title'>CAIOS Chrome Extension</h1>
       {children}
     </header>
   );

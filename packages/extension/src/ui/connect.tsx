@@ -72,11 +72,25 @@ const ConnectApp: React.FC = () => {
 
   const connect = useCallback(async (selection: Selection) => {
     setCandidates(null);
-    const response = await chrome.runtime.sendMessage<PageMessage>({ type: 'connect', options, selection }).catch(e => ({ error: String(e) }));
-    if (response?.success)
-      setStatus({ type: 'connected', message: `"${options.clientName}" connected.` });
-    else
-      setStatus({ type: 'error', message: response?.error || `"${options.clientName}" failed to connect.` });
+    setStatus({ type: 'connecting', message: 'Selection approved. Establishing the local relay and attaching the selected tab…' });
+    // Only surface progress locally; do not log tab content, local relay URLs or authentication tokens.
+    const slowNotice = setTimeout(() => {
+      setStatus({
+        type: 'connecting',
+        message: 'Still connecting after 12 seconds. The tab is not confirmed accessible yet. Check Manage clients and the MCP client response before retrying.'
+      });
+    }, 12_000);
+    try {
+      const response = await chrome.runtime.sendMessage<PageMessage>({ type: 'connect', options, selection });
+      if (response?.success)
+        setStatus({ type: 'connected', message: `"${options.clientName}" connected. Verify the actual tab title and URL in the Playwright client.` });
+      else
+        setStatus({ type: 'error', message: `Connection or selected-tab attachment failed: ${response?.error || 'unknown error'}` });
+    } catch (error) {
+      setStatus({ type: 'error', message: `Chrome could not complete the selected-tab connection: ${String(error)}` });
+    } finally {
+      clearTimeout(slowNotice);
+    }
   }, []);
 
   useEffect(() => {
@@ -92,22 +106,30 @@ const ConnectApp: React.FC = () => {
         setStatus(versionError);
         return;
       }
-      setStatus({ type: 'connecting', message: `"${options.clientName}" is trying to connect to the Playwright Extension.` });
-      await chrome.runtime.sendMessage<PageMessage>({ type: 'connectionRequested', mcpRelayUrl: relayUrl! });
-
-      const token = params.get('token');
-      if (!token) {
-        setCandidates(await chrome.runtime.sendMessage<PageMessage>({ type: 'getCandidates' }));
-        return;
-      }
+      let phase = 'registering the local connection request';
+      try {
+        setStatus({ type: 'connecting', message: `"${options.clientName}" is requesting a CAIOS Chrome connection.` });
+        await chrome.runtime.sendMessage<PageMessage>({ type: 'connectionRequested', mcpRelayUrl: relayUrl! });
+        phase = 'loading available tabs';
+        setStatus({ type: 'connecting', message: 'Local connection request received. Loading available tabs…' });
+        const token = params.get('token');
+        if (!token) {
+          const available = await chrome.runtime.sendMessage<PageMessage>({ type: 'getCandidates' });
+          setCandidates(available);
+          setStatus({ type: 'connecting', message: 'Choose the intended tab and approve this connection.' });
+          return;
+        }
       // With a token, this page becomes the blank tab of the client; keep the token out of its history.
       const url = new URL(window.location.href);
       url.searchParams.delete('token');
       window.history.replaceState(null, '', url);
-      if (token === getOrCreateAuthToken())
-        await connect({});
-      else
-        setStatus({ type: 'error', message: 'Invalid token provided.' });
+        if (token === getOrCreateAuthToken())
+          await connect({});
+        else
+          setStatus({ type: 'error', message: 'Invalid token provided.' });
+      } catch (error) {
+        setStatus({ type: 'error', message: `CAIOS connection failed while ${phase}: ${String(error)}` });
+      }
     };
     void start();
     // The service worker holds the pending request and stops after 30s without messages.
