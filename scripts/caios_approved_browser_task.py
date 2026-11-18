@@ -280,19 +280,30 @@ def run(args):
         emit("APPROVED_TARGET_VERIFIED", profile=plan["profile"],
              index=selected["index"], stage_seconds=round(time.monotonic() - stage_start, 3))
 
-        def verify_url(expected, phase):
-            tabs = tabs_from_result(call("browser_tabs", {"action": "list"}, phase))
-            current = [tab for tab in tabs if tab["current"]]
-            if len(current) != 1 or not current[0]["url"].startswith(expected):
-                raise MCPFault("destination_not_confirmed", phase)
-            # A returned navigation error can mean the page arrived but full loading
-            # timed out. A bounded DOM probe confirms a useful destination.
-            function = ("() => {if (!location.href.startsWith(" + json.dumps(expected) +
-                        ")) throw new Error('Wrong destination');" +
+        def verify_url(expected, phase, *, exact=False):
+            # Browser tab headers can briefly lag behind the actual document.
+            # Only a returned MCP result may be rechecked; never retry an unanswered call.
+            comparison = ("location.href !== " + json.dumps(expected) if exact
+                          else "!location.href.startsWith(" + json.dumps(expected) + ")")
+            function = ("() => {if (" + comparison +
+                        ") throw new Error('Wrong destination'); " +
                         "if (document.readyState === 'loading' || !document.body) " +
                         "throw new Error('Document not ready'); return {ready:true};}")
-            call("browser_evaluate", {"function": function}, phase + "-readiness")
-            return current[0]["url"]
+            for attempt in range(3):
+                tabs = tabs_from_result(call("browser_tabs", {"action": "list"}, phase))
+                current = [tab for tab in tabs if tab["current"]]
+                if (len(current) != 1 or current[0]["crashed"]
+                        or current[0]["index"] != selected["index"]):
+                    raise MCPFault("approved_tab_changed", phase)
+                try:
+                    call("browser_evaluate", {"function": function}, phase + "-readiness")
+                    return expected
+                except MCPFault as exc:
+                    if isinstance(exc, UnknownOutcome) or exc.code != "tool_returned_error":
+                        raise
+                    if attempt == 2:
+                        raise MCPFault("destination_not_confirmed", phase) from None
+                    time.sleep(0.2)
 
         def execute(step, cleanup=False):
             nonlocal unknown
@@ -341,13 +352,22 @@ def run(args):
                         current_stage = "restore-original-url"
                         tabs = tabs_from_result(call("browser_tabs", {"action": "list"}, current_stage))
                         current = [t for t in tabs if t["current"]]
-                        if len(current) != 1:
-                            raise MCPFault("current_tab_ambiguous", current_stage)
+                        if (len(current) != 1 or current[0]["crashed"]
+                                or current[0]["index"] != selected["index"]):
+                            raise MCPFault("approved_tab_changed", current_stage)
                         if current[0]["url"] != original_url:
-                            restore = {"name": "restore_original_url", "tool": "browser_navigate",
-                                       "arguments": {"url": original_url}}
-                            execute(restore, cleanup=True)
-                        verify_url(original_url, "restore-original-url-verify")
+                            # Before sending a restore navigation, check whether the DOM
+                            # has already arrived and only the tab header is stale.
+                            try:
+                                verify_url(original_url, "restore-original-url-precheck",
+                                           exact=True)
+                            except MCPFault as exc:
+                                if isinstance(exc, UnknownOutcome) or exc.code != "destination_not_confirmed":
+                                    raise
+                                restore = {"name": "restore_original_url", "tool": "browser_navigate",
+                                           "arguments": {"url": original_url}}
+                                execute(restore, cleanup=True)
+                        verify_url(original_url, "restore-original-url-verify", exact=True)
                         emit("ORIGINAL_URL_RESTORED")
                     except Exception as exc:
                         cleanup_errors.append(exc)
