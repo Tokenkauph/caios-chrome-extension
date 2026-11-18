@@ -106,6 +106,10 @@ for line in sys.stdin:
                         stale_restore_listing = 2
                     if mode == "readiness_lag":
                         readiness_lag = 1
+                    if mode == "diagnostic_late_ready":
+                        readiness_lag = 6
+                    if mode == "restore_same_origin_redirect":
+                        urls[current] = "https://www.google.com/?redirect=1"
                     if mode == "restore_wrong_page":
                         urls[current] = "https://www.google.com/wrong"
                     if mode == "restore_prefix_collision":
@@ -117,6 +121,18 @@ for line in sys.stdin:
         elif tool == "browser_evaluate":
             record("evaluate")
             expression = args.get("function", "")
+            if "CAIOS_R1_STATUS_" in expression:
+                found = re.search(r'const e=("[^"]+")', expression)
+                expected = json.loads(found.group(1)) if found else ""
+                actual = urls[current]
+                if actual == expected:
+                    category = "EXACT_READY"
+                elif actual.split("/")[2] == expected.split("/")[2]:
+                    category = "SAME_ORIGIN_MISMATCH"
+                else:
+                    category = "OTHER_ORIGIN"
+                reply(req, {"content": [{"type": "text", "text": "CAIOS_R1_STATUS_" + category}]})
+                continue
             exact = re.search(r'location\.href !== ("[^"]+")', expression)
             prefix = re.search(r'location\.href\.startsWith\(("[^"]+")\)', expression)
             if exact or prefix:
@@ -280,6 +296,22 @@ class ApprovedTaskTests(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stdout)
         self.assertTrue(any(e["event"] == "ORIGINAL_URL_RESTORED" for e in ev))
         self.assertEqual(trace.count("navigate_https://www.google.com/"), 1)
+
+    def test_redacted_final_probe_accepts_exact_ready_document(self):
+        r, ev, trace = self.run_task(mode="diagnostic_late_ready")
+        self.assertEqual(r.returncode, 0, r.stdout)
+        self.assertTrue(any(e["event"] == "RESTORE_URL_STATE" and
+                            e["category"] == "EXACT_READY" for e in ev))
+        self.assertEqual(trace.count("navigate_https://www.google.com/"), 1)
+        self.assertNotIn("https://www.google.com/", r.stdout)
+
+    def test_same_origin_redirect_does_not_pass_exact_restore(self):
+        r, ev, _ = self.run_task(mode="restore_same_origin_redirect")
+        self.assertEqual(r.returncode, 1, r.stdout)
+        self.assertTrue(any(e["event"] == "RESTORE_URL_STATE" and
+                            e["category"] == "SAME_ORIGIN_MISMATCH" for e in ev))
+        self.assertFalse(any(e["event"] == "ORIGINAL_URL_RESTORED" for e in ev))
+        self.assertNotIn("https://www.google.com/?redirect=1", r.stdout)
 
     def test_no_restore_requested_leaves_new_page(self):
         r, ev, trace = self.run_task({"restore_original_url": False, "finally_steps": []})
