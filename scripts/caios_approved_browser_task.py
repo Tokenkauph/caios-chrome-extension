@@ -290,13 +290,18 @@ def run(args):
                         "if (document.readyState === 'loading' || !document.body) " +
                         "throw new Error('Document not ready'); return {ready:true};}")
             for attempt in range(3):
-                tabs = tabs_from_result(call("browser_tabs", {"action": "list"}, phase))
+                # Exact restoration gets a short per-request wait; ordinary
+                # navigation recovery keeps its existing step timeout.
+                probe_timeout = min(args.step_timeout, 3.0) if exact else None
+                tabs = tabs_from_result(call("browser_tabs", {"action": "list"}, phase,
+                                             timeout=probe_timeout))
                 current = [tab for tab in tabs if tab["current"]]
                 if (len(current) != 1 or current[0]["crashed"]
                         or current[0]["index"] != selected["index"]):
                     raise MCPFault("approved_tab_changed", phase)
                 try:
-                    call("browser_evaluate", {"function": function}, phase + "-readiness")
+                    call("browser_evaluate", {"function": function}, phase + "-readiness",
+                         timeout=probe_timeout)
                     return expected
                 except MCPFault as exc:
                     if isinstance(exc, UnknownOutcome) or exc.code != "tool_returned_error":
