@@ -19,12 +19,17 @@ MODULE = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(MODULE)
 
 FAKE_MCP = r'''
-import json, os, sys, time
+import json, os, re, sys, time
 mode = os.environ.get("FAKE_MODE", "")
 trace = os.environ["FAKE_TRACE"]
 current = 0
 urls = {0: "https://other.invalid/", 1: "https://www.google.com/"}
+if mode == "restore_prefix_collision":
+    urls[1] = "https://www.google.com/page?item=123"
 titles = {0: "Other account", 1: "Google"}
+stale_restore_listing = 0
+readiness_lag = 0
+after_navigation = False
 def record(value):
     with open(trace, "a") as out:
         out.write(value + "\n")
@@ -32,10 +37,16 @@ def reply(req, result):
     sys.stdout.write(json.dumps({"jsonrpc": "2.0", "id": req["id"], "result": result}) + "\n")
     sys.stdout.flush()
 def tab_list():
+    global stale_restore_listing
     lines = []
     for i in sorted(urls):
+        shown_url = urls[i]
+        if i == 1 and stale_restore_listing:
+            shown_url = "https://en.wikipedia.org/wiki/European_badger"
+            stale_restore_listing -= 1
+        shown_current = current == i or (mode == "ambiguous_current_after_navigation" and after_navigation)
         lines.append("- %d:%s [%s](%s)" % (
-            i, "(current) " if current == i else "", titles[i], urls[i]))
+            i, "(current) " if shown_current else "", titles[i], shown_url))
     if mode == "ambiguous":
         lines.append("- 2: [Google](https://www.google.com/)")
     if mode == "crashed":
@@ -86,12 +97,38 @@ for line in sys.stdin:
             if mode != "nav_failed" or "wikipedia" not in target:
                 urls[current] = target
                 titles[current] = "European badger - Wikipedia" if "wikipedia" in target else "Google"
+                if "wikipedia" in target:
+                    after_navigation = True
+                    if mode == "switch_current_after_navigation":
+                        current = 0
+                else:
+                    if mode == "stale_restore_listing":
+                        stale_restore_listing = 2
+                    if mode == "readiness_lag":
+                        readiness_lag = 1
+                    if mode == "restore_wrong_page":
+                        urls[current] = "https://www.google.com/wrong"
+                    if mode == "restore_prefix_collision":
+                        urls[current] = target + "4"
             if mode in ("nav_arrived_error", "nav_failed") and "wikipedia" in target:
                 reply(req, {"isError": True, "content": [{"type": "text", "text": "Navigation timeout"}]})
             else:
                 reply(req, {"content": [{"type": "text", "text": "Done"}]})
         elif tool == "browser_evaluate":
             record("evaluate")
+            expression = args.get("function", "")
+            exact = re.search(r'location\.href !== ("[^"]+")', expression)
+            prefix = re.search(r'location\.href\.startsWith\(("[^"]+")\)', expression)
+            if exact or prefix:
+                expected = json.loads((exact or prefix).group(1))
+                actual = urls[current]
+                correct = actual == expected if exact else actual.startswith(expected)
+                if readiness_lag and actual.startswith("https://www.google.com/"):
+                    readiness_lag -= 1
+                    correct = False
+                if not correct:
+                    reply(req, {"isError": True, "content": [{"type": "text", "text": "Not at destination"}]})
+                    continue
             reply(req, {"content": [{"type": "text", "text": "Done"}]})
         else:
             reply(req, {"isError": True})
@@ -208,6 +245,41 @@ class ApprovedTaskTests(unittest.TestCase):
         self.assertEqual(r.returncode, 1)
         self.assertTrue(any(e["event"] == "RESTORE_FAILED" for e in ev))
         self.assertEqual([e for e in ev if e["event"] == "TASK_FAILED"][0]["primary_steps_completed"], 3)
+
+    def test_delayed_tab_listing_accepts_correct_document(self):
+        r, ev, trace = self.run_task(mode="stale_restore_listing")
+        self.assertEqual(r.returncode, 0, r.stdout)
+        self.assertTrue(any(e["event"] == "ORIGINAL_URL_RESTORED" for e in ev))
+        self.assertEqual(trace.count("navigate_https://www.google.com/"), 1)
+
+    def test_wrong_restored_page_is_not_accepted(self):
+        r, ev, _ = self.run_task(mode="restore_wrong_page")
+        self.assertEqual(r.returncode, 1, r.stdout)
+        self.assertTrue(any(e["event"] == "RESTORE_FAILED" for e in ev))
+        self.assertFalse(any(e["event"] == "ORIGINAL_URL_RESTORED" for e in ev))
+
+    def test_exact_original_query_not_prefix_collision(self):
+        r, ev, _ = self.run_task(mode="restore_prefix_collision")
+        self.assertEqual(r.returncode, 1, r.stdout)
+        self.assertTrue(any(e["event"] == "RESTORE_FAILED" for e in ev))
+
+    def test_switched_current_tab_never_receives_restore_navigation(self):
+        r, ev, trace = self.run_task(mode="switch_current_after_navigation")
+        self.assertEqual(r.returncode, 1, r.stdout)
+        self.assertFalse(any("navigate_https://www.google.com/" in x for x in trace))
+        self.assertTrue(any(e["event"] == "RESTORE_FAILED" for e in ev))
+
+    def test_ambiguous_current_tab_never_receives_restore_navigation(self):
+        r, ev, trace = self.run_task(mode="ambiguous_current_after_navigation")
+        self.assertEqual(r.returncode, 1, r.stdout)
+        self.assertFalse(any("navigate_https://www.google.com/" in x for x in trace))
+        self.assertTrue(any(e["event"] == "RESTORE_FAILED" for e in ev))
+
+    def test_brief_loading_delay_settles_without_duplicate_navigation(self):
+        r, ev, trace = self.run_task(mode="readiness_lag")
+        self.assertEqual(r.returncode, 0, r.stdout)
+        self.assertTrue(any(e["event"] == "ORIGINAL_URL_RESTORED" for e in ev))
+        self.assertEqual(trace.count("navigate_https://www.google.com/"), 1)
 
     def test_no_restore_requested_leaves_new_page(self):
         r, ev, trace = self.run_task({"restore_original_url": False, "finally_steps": []})
