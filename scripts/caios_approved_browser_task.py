@@ -280,18 +280,46 @@ def run(args):
         emit("APPROVED_TARGET_VERIFIED", profile=plan["profile"],
              index=selected["index"], stage_seconds=round(time.monotonic() - stage_start, 3))
 
-        def verify_url(expected, phase, *, exact=False):
-            # Browser tab headers can briefly lag behind the actual document.
-            # Only a returned MCP result may be rechecked; never retry an unanswered call.
+        def restore_url_status(expected, phase):
+            """Only an allowlisted state is emitted; no browser URL is logged."""
+            function = ("() => {const e=" + json.dumps(expected) + ";"
+                        "const a=location.href;"
+                        "if(document.readyState==='loading'||!document.body)"
+                        "return 'CAIOS_R1_STATUS_LOADING';"
+                        "if(a===e)return 'CAIOS_R1_STATUS_EXACT_READY';"
+                        "try{return new URL(a).origin===new URL(e).origin"
+                        "?'CAIOS_R1_STATUS_SAME_ORIGIN_MISMATCH'"
+                        ":'CAIOS_R1_STATUS_OTHER_ORIGIN';}"
+                        "catch{return 'CAIOS_R1_STATUS_UNREADABLE';}}")
+            try:
+                result = call("browser_evaluate", {"function": function},
+                              phase + "-redacted-status", timeout=min(args.step_timeout, 3.0))
+            except MCPFault as exc:
+                if isinstance(exc, UnknownOutcome):
+                    raise
+                emit("RESTORE_URL_STATE", category="evaluation_error")
+                return "evaluation_error"
+            content = "\n".join(str(item.get("text", "")) for item in result.get("content", []))
+            categories = ("EXACT_READY", "LOADING", "SAME_ORIGIN_MISMATCH",
+                          "OTHER_ORIGIN", "UNREADABLE")
+            matched = [name for name in categories if "CAIOS_R1_STATUS_" + name in content]
+            category = matched[0] if len(matched) == 1 else "unavailable"
+            emit("RESTORE_URL_STATE", category=category)
+            return category
+
+        def verify_url(expected, phase, *, exact=False, precheck=False):
+            # Only returned MCP errors are safe to recheck; no retry of
+            # unanswered or ambiguous mutation calls.
             comparison = ("location.href !== " + json.dumps(expected) if exact
                           else "!location.href.startsWith(" + json.dumps(expected) + ")")
             function = ("() => {if (" + comparison +
                         ") throw new Error('Wrong destination'); " +
                         "if (document.readyState === 'loading' || !document.body) " +
                         "throw new Error('Document not ready'); return {ready:true};}")
-            for attempt in range(3):
-                # Exact restoration gets a short per-request wait; ordinary
-                # navigation recovery keeps its existing step timeout.
+            # One cheap precheck determines whether to restore. Actual
+            # restoration gets bounded additional time for DOM to settle.
+            attempts = 1 if precheck else (6 if exact else 3)
+            for attempt in range(attempts):
                 probe_timeout = min(args.step_timeout, 3.0) if exact else None
                 tabs = tabs_from_result(call("browser_tabs", {"action": "list"}, phase,
                                              timeout=probe_timeout))
@@ -306,9 +334,12 @@ def run(args):
                 except MCPFault as exc:
                     if isinstance(exc, UnknownOutcome) or exc.code != "tool_returned_error":
                         raise
-                    if attempt == 2:
+                    if attempt == attempts - 1:
+                        if exact and not precheck:
+                            if restore_url_status(expected, phase) == "EXACT_READY":
+                                return expected
                         raise MCPFault("destination_not_confirmed", phase) from None
-                    time.sleep(0.2)
+                    time.sleep(0.35 if exact else 0.2)
 
         def execute(step, cleanup=False):
             nonlocal unknown
@@ -365,7 +396,7 @@ def run(args):
                             # has already arrived and only the tab header is stale.
                             try:
                                 verify_url(original_url, "restore-original-url-precheck",
-                                           exact=True)
+                                           exact=True, precheck=True)
                             except MCPFault as exc:
                                 if isinstance(exc, UnknownOutcome) or exc.code != "destination_not_confirmed":
                                     raise
