@@ -131,7 +131,12 @@ for line in sys.stdin:
                     category = "SAME_ORIGIN_MISMATCH"
                 else:
                     category = "OTHER_ORIGIN"
-                reply(req, {"content": [{"type": "text", "text": "CAIOS_R1_STATUS_" + category}]})
+                # Real Playwright includes both the scalar Result and echoed JS Code.
+                response_text = ("### Result" + chr(10) + chr(34) +
+                                 "CAIOS_R1_STATUS_" + category + chr(34) +
+                                 chr(10) + chr(10) + "### Ran Playwright code" +
+                                 chr(10) + expression)
+                reply(req, {"content": [{"type": "text", "text": response_text}]})
                 continue
             exact = re.search(r'location\.href !== ("[^"]+")', expression)
             prefix = re.search(r'location\.href\.startsWith\(("[^"]+")\)', expression)

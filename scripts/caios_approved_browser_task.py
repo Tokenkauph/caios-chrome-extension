@@ -299,7 +299,23 @@ def run(args):
                     raise
                 emit("RESTORE_URL_STATE", category="evaluation_error")
                 return "evaluation_error"
-            content = "\n".join(str(item.get("text", "")) for item in result.get("content", []))
+            # Playwright's formatted response also echoes the JavaScript code,
+            # which contains *all* possible status literals. Parse only the
+            # "### Result" section (or the JSON-mode result field), never code.
+            rendered = []
+            for item in result.get("content", []):
+                body = str(item.get("text", ""))
+                if "### Result\n" in body:
+                    value = body.split("### Result\n", 1)[1].split("\n### ", 1)[0]
+                    rendered.append(value)
+                else:
+                    try:
+                        json_response = json.loads(body)
+                    except (ValueError, TypeError):
+                        continue
+                    if isinstance(json_response, dict) and isinstance(json_response.get("result"), str):
+                        rendered.append(json_response["result"])
+            content = "\n".join(rendered)
             categories = ("EXACT_READY", "LOADING", "SAME_ORIGIN_MISMATCH",
                           "OTHER_ORIGIN", "UNREADABLE")
             matched = [name for name in categories if "CAIOS_R1_STATUS_" + name in content]
