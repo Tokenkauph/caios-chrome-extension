@@ -251,8 +251,12 @@ def run(args):
         emit("STAGE_DONE", phase="tools-list", duration_seconds=round(time.monotonic() - phase_started, 3))
         available = {tool["name"] for tool in tool_list.get("tools", [])}
         required = {"browser_tabs"} | {step["tool"] for step in plan["steps"] + plan.get("finally_steps", [])}
+        history_restore = bool(plan.get("restore_original_url")) and (
+            sum(step["tool"] == "browser_navigate" for step in plan["steps"]) == 1
+            and not any(step["tool"] in ("browser_navigate_back", "browser_navigate_forward")
+                        for step in plan["steps"]))
         if plan.get("restore_original_url"):
-            required.add("browser_navigate")
+            required.add("browser_navigate_back" if history_restore else "browser_navigate")
         if plan.get("restore_original_url") or any(x["tool"] == "browser_navigate" for x in plan["steps"]):
             required.add("browser_evaluate")
         if required - available:
@@ -274,7 +278,39 @@ def run(args):
         selected = exact_target(current_tabs, plan["expected_title"], plan["expected_url_prefix"])
         if not selected["current"]:
             raise MCPFault("approved_tab_not_active", current_stage)
-        original_url = selected["url"]
+        def scalar_results(result):
+            """Read only Playwright's actual Result, never the echoed JS Code."""
+            rendered = []
+            for item in result.get("content", []):
+                body = str(item.get("text", ""))
+                if "### Result\n" in body:
+                    rendered.append(body.split("### Result\n", 1)[1].split("\n### ", 1)[0])
+                else:
+                    try:
+                        json_response = json.loads(body)
+                    except (ValueError, TypeError):
+                        continue
+                    if isinstance(json_response, dict) and isinstance(json_response.get("result"), str):
+                        rendered.append(json.dumps(json_response["result"]))
+            return rendered
+
+        def capture_live_original_url():
+            result = call("browser_evaluate", {"function": "() => location.href"},
+                          "capture-original-url", timeout=min(args.step_timeout, 5.0))
+            values = scalar_results(result)
+            if len(values) != 1:
+                raise MCPFault("original_url_unavailable", "capture-original-url")
+            try:
+                live_url = json.loads(values[0].strip())
+            except (ValueError, TypeError):
+                raise MCPFault("original_url_unavailable", "capture-original-url") from None
+            if not isinstance(live_url, str) or not live_url.startswith(plan["expected_url_prefix"]):
+                raise MCPFault("original_url_not_approved", "capture-original-url")
+            emit("ORIGINAL_URL_CAPTURED", source="live_document",
+                 tab_list_comparison="exact" if live_url == selected["url"] else "different")
+            return live_url
+
+        original_url = capture_live_original_url()
         emit("STAGE_DONE", phase="approved-tab-select-and-verify", duration_seconds=round(time.monotonic() - select_started, 3))
         approved = True
         emit("APPROVED_TARGET_VERIFIED", profile=plan["profile"],
@@ -299,23 +335,7 @@ def run(args):
                     raise
                 emit("RESTORE_URL_STATE", category="evaluation_error")
                 return "evaluation_error"
-            # Playwright's formatted response also echoes the JavaScript code,
-            # which contains *all* possible status literals. Parse only the
-            # "### Result" section (or the JSON-mode result field), never code.
-            rendered = []
-            for item in result.get("content", []):
-                body = str(item.get("text", ""))
-                if "### Result\n" in body:
-                    value = body.split("### Result\n", 1)[1].split("\n### ", 1)[0]
-                    rendered.append(value)
-                else:
-                    try:
-                        json_response = json.loads(body)
-                    except (ValueError, TypeError):
-                        continue
-                    if isinstance(json_response, dict) and isinstance(json_response.get("result"), str):
-                        rendered.append(json_response["result"])
-            content = "\n".join(rendered)
+            content = "\n".join(scalar_results(result))
             categories = ("EXACT_READY", "LOADING", "SAME_ORIGIN_MISMATCH",
                           "OTHER_ORIGIN", "UNREADABLE")
             matched = [name for name in categories if "CAIOS_R1_STATUS_" + name in content]
@@ -367,11 +387,13 @@ def run(args):
             try:
                 call(step["tool"], step["arguments"], phase)
             except MCPFault as exc:
-                if exc.code == "tool_returned_error" and step["tool"] == "browser_navigate":
-                    target_url = step["arguments"].get("url")
+                if exc.code == "tool_returned_error" and step["tool"] in ("browser_navigate", "browser_navigate_back"):
+                    target_url = (original_url if step["tool"] == "browser_navigate_back"
+                                  else step["arguments"].get("url"))
                     if not isinstance(target_url, str) or not target_url.startswith(("https://", "http://")):
                         raise
-                    verify_url(target_url, phase + "-verify-after-error")
+                    verify_url(target_url, phase + "-verify-after-error",
+                               exact=step["tool"] == "browser_navigate_back")
                     recovered = True
                     emit("NAVIGATION_ARRIVAL_CONFIRMED", name=name)
                 else:
@@ -416,8 +438,11 @@ def run(args):
                             except MCPFault as exc:
                                 if isinstance(exc, UnknownOutcome) or exc.code != "destination_not_confirmed":
                                     raise
-                                restore = {"name": "restore_original_url", "tool": "browser_navigate",
-                                           "arguments": {"url": original_url}}
+                                restore = {
+                                    "name": "restore_original_url",
+                                    "tool": "browser_navigate_back" if history_restore else "browser_navigate",
+                                    "arguments": {} if history_restore else {"url": original_url},
+                                }
                                 execute(restore, cleanup=True)
                         verify_url(original_url, "restore-original-url-verify", exact=True)
                         emit("ORIGINAL_URL_RESTORED")
