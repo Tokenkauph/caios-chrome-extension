@@ -1,0 +1,38 @@
+# Minimal CAIOS R1 regression. No inherited Playwright matrices, macOS, large runners,
+# artifacts, releases, publishing, schedules, or external services.
+# Standard GitHub-hosted Ubuntu is free in public repositories.
+name: CAIOS R1 focused regression
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/caios-r1.yml"
+      - "scripts/caios_approved_browser_task.py"
+      - "tests/caios/**"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/caios-r1.yml"
+      - "scripts/caios_approved_browser_task.py"
+      - "tests/caios/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: caios-r1-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python-regression:
+    name: Focused R1 Python regression
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check R1 runner syntax
+        run: python3 -m py_compile scripts/caios_approved_browser_task.py tests/caios/test_approved_browser_task.py
+      - name: Focused R1 regression only
+        run: python3 -m unittest discover -s tests/caios -p test_approved_browser_task.py -v
