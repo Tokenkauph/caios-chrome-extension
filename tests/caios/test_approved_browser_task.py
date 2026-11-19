@@ -27,6 +27,7 @@ urls = {0: "https://other.invalid/", 1: "https://www.google.com/"}
 if mode == "restore_prefix_collision":
     urls[1] = "https://www.google.com/page?item=123"
 titles = {0: "Other account", 1: "Google"}
+history = {0: [], 1: []}
 stale_restore_listing = 0
 readiness_lag = 0
 after_navigation = False
@@ -41,6 +42,8 @@ def tab_list():
     lines = []
     for i in sorted(urls):
         shown_url = urls[i]
+        if i == 1 and mode == "stale_initial_tab_url" and not after_navigation:
+            shown_url = "https://www.google.com/?tab-list-stale=1"
         if i == 1 and stale_restore_listing:
             shown_url = "https://en.wikipedia.org/wiki/European_badger"
             stale_restore_listing -= 1
@@ -60,7 +63,7 @@ for line in sys.stdin:
     if method == "initialize":
         reply(req, {"serverInfo": {"name": "Fake CAIOS MCP"}})
     elif method == "tools/list":
-        reply(req, {"tools": [{"name": n} for n in ("browser_tabs", "browser_evaluate", "browser_navigate")]})
+        reply(req, {"tools": [{"name": n} for n in ("browser_tabs", "browser_evaluate", "browser_navigate", "browser_navigate_back")]})
     elif method == "tools/call":
         tool = req["params"]["name"]
         args = req["params"]["arguments"]
@@ -95,6 +98,7 @@ for line in sys.stdin:
                 reply(req, {"isError": True, "content": [{"type": "text", "text": "Load failed"}]})
                 continue
             if mode != "nav_failed" or "wikipedia" not in target:
+                history[current].append(urls[current])
                 urls[current] = target
                 titles[current] = "European badger - Wikipedia" if "wikipedia" in target else "Google"
                 if "wikipedia" in target:
@@ -118,9 +122,44 @@ for line in sys.stdin:
                 reply(req, {"isError": True, "content": [{"type": "text", "text": "Navigation timeout"}]})
             else:
                 reply(req, {"content": [{"type": "text", "text": "Done"}]})
+        elif tool == "browser_navigate_back":
+            record("navigate_back")
+            if mode == "back_timeout":
+                time.sleep(3)
+                continue
+            if mode == "restore_fail":
+                reply(req, {"isError": True, "content": [{"type": "text", "text": "Back failed"}]})
+                continue
+            if not history[current]:
+                reply(req, {"isError": True, "content": [{"type": "text", "text": "No history"}]})
+                continue
+            urls[current] = history[current].pop()
+            titles[current] = "Google" if "google" in urls[current] else "European badger - Wikipedia"
+            if mode == "restore_wrong_page":
+                urls[current] = "https://www.google.com/wrong"
+            if mode == "restore_prefix_collision":
+                urls[current] += "4"
+            if mode == "back_same_origin_redirect":
+                urls[current] = "https://www.google.com/?redirect=1"
+            if mode == "stale_restore_listing":
+                stale_restore_listing = 2
+            if mode == "readiness_lag":
+                readiness_lag = 1
+            if mode == "diagnostic_late_ready":
+                readiness_lag = 6
+            if mode == "back_arrived_error":
+                reply(req, {"isError": True, "content": [{"type": "text", "text": "Navigation error"}]})
+                continue
+            reply(req, {"content": [{"type": "text", "text": "Done"}]})
         elif tool == "browser_evaluate":
             record("evaluate")
             expression = args.get("function", "")
+            if expression.strip() == "() => location.href":
+                value = urls[current]
+                response_text = ("### Result\n" + json.dumps(value) +
+                                 "\n\n### Ran Playwright code\n" + expression)
+                reply(req, {"content": [{"type": "text", "text": response_text}]})
+                continue
             if "CAIOS_R1_STATUS_" in expression:
                 found = re.search(r'const e=("[^"]+")', expression)
                 expected = json.loads(found.group(1)) if found else ""
@@ -271,7 +310,7 @@ class ApprovedTaskTests(unittest.TestCase):
         r, ev, trace = self.run_task(mode="stale_restore_listing")
         self.assertEqual(r.returncode, 0, r.stdout)
         self.assertTrue(any(e["event"] == "ORIGINAL_URL_RESTORED" for e in ev))
-        self.assertEqual(trace.count("navigate_https://www.google.com/"), 1)
+        self.assertEqual(trace.count("navigate_back"), 1)
 
     def test_wrong_restored_page_is_not_accepted(self):
         r, ev, _ = self.run_task(mode="restore_wrong_page")
@@ -300,23 +339,55 @@ class ApprovedTaskTests(unittest.TestCase):
         r, ev, trace = self.run_task(mode="readiness_lag")
         self.assertEqual(r.returncode, 0, r.stdout)
         self.assertTrue(any(e["event"] == "ORIGINAL_URL_RESTORED" for e in ev))
-        self.assertEqual(trace.count("navigate_https://www.google.com/"), 1)
+        self.assertEqual(trace.count("navigate_back"), 1)
 
     def test_redacted_final_probe_accepts_exact_ready_document(self):
         r, ev, trace = self.run_task(mode="diagnostic_late_ready")
         self.assertEqual(r.returncode, 0, r.stdout)
         self.assertTrue(any(e["event"] == "RESTORE_URL_STATE" and
                             e["category"] == "EXACT_READY" for e in ev))
-        self.assertEqual(trace.count("navigate_https://www.google.com/"), 1)
+        self.assertEqual(trace.count("navigate_back"), 1)
         self.assertNotIn("https://www.google.com/", r.stdout)
 
     def test_same_origin_redirect_does_not_pass_exact_restore(self):
-        r, ev, _ = self.run_task(mode="restore_same_origin_redirect")
+        r, ev, _ = self.run_task(mode="back_same_origin_redirect")
         self.assertEqual(r.returncode, 1, r.stdout)
         self.assertTrue(any(e["event"] == "RESTORE_URL_STATE" and
                             e["category"] == "SAME_ORIGIN_MISMATCH" for e in ev))
         self.assertFalse(any(e["event"] == "ORIGINAL_URL_RESTORED" for e in ev))
         self.assertNotIn("https://www.google.com/?redirect=1", r.stdout)
+
+    def test_history_back_avoids_redirect_on_reopening_google(self):
+        r, ev, trace = self.run_task(mode="restore_same_origin_redirect")
+        self.assertEqual(r.returncode, 0, r.stdout)
+        self.assertEqual(trace.count("navigate_back"), 1)
+        self.assertNotIn("navigate_https://www.google.com/", trace)
+        self.assertTrue(any(e["event"] == "ORIGINAL_URL_RESTORED" for e in ev))
+
+    def test_capture_live_document_url_not_stale_tab_header(self):
+        r, ev, trace = self.run_task(mode="stale_initial_tab_url")
+        self.assertEqual(r.returncode, 0, r.stdout)
+        self.assertTrue(any(e["event"] == "ORIGINAL_URL_CAPTURED" and
+                            e["tab_list_comparison"] == "different" for e in ev))
+        self.assertEqual(trace.count("navigate_back"), 1)
+        self.assertNotIn("https://www.google.com/?tab-list-stale=1", r.stdout)
+
+    def test_back_error_after_arrival_is_verified_without_duplicate_navigation(self):
+        r, ev, trace = self.run_task(mode="back_arrived_error")
+        self.assertEqual(r.returncode, 0, r.stdout)
+        self.assertEqual(trace.count("navigate_back"), 1)
+        self.assertTrue(any(e["event"] == "NAVIGATION_ARRIVAL_CONFIRMED" and
+                            e["name"] == "restore_original_url" for e in ev))
+
+    def test_multiple_navigation_task_keeps_existing_restoration(self):
+        steps = list(self.task["steps"])
+        steps.append({"name": "second_navigation", "tool": "browser_navigate",
+                      "arguments": {"url": "https://en.wikipedia.org/wiki/European_badger?view=1"}})
+        r, ev, trace = self.run_task({"steps": steps})
+        self.assertEqual(r.returncode, 0, r.stdout)
+        self.assertNotIn("navigate_back", trace)
+        self.assertEqual(trace.count("navigate_https://www.google.com/"), 1)
+        self.assertTrue(any(e["event"] == "ORIGINAL_URL_RESTORED" for e in ev))
 
     def test_no_restore_requested_leaves_new_page(self):
         r, ev, trace = self.run_task({"restore_original_url": False, "finally_steps": []})
