@@ -47,8 +47,9 @@ export type TestFixtures = {
   cli: (args: string[], options?: { env?: Record<string, string> }) => Promise<CliResult>;
 };
 
-// The CAIOS fork uses its own ID; keep Microsoft's ID as the default for upstream tests.
-export const extensionId = process.env.CAIOS_PLAYWRIGHT_EXTENSION_ID || 'mmlmfjhmonkocbjadbfplnigmagldckm';
+// Use the CAIOS ID for this fork's tests, keeping spawned MCP clients in sync.
+export const extensionId = process.env.CAIOS_PLAYWRIGHT_EXTENSION_ID || 'kanpfbepfgcpmjoeaaihigjkcdjejbld';
+process.env.CAIOS_PLAYWRIGHT_EXTENSION_ID = extensionId;
 
 export const test = base.extend<TestFixtures>({
   pathToExtension: async ({}, use, testInfo) => {
