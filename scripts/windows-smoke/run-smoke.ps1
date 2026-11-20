@@ -49,7 +49,8 @@ if ($task.expected_title -ne 'Example Domain' -or $task.expected_url_prefix -ne 
 $plan = Join-Path $env:TEMP ('caios-chrome-smoke-' + [guid]::NewGuid().ToString('N') + '.json')
 $log = Join-Path $env:TEMP ('caios-chrome-smoke-' + [guid]::NewGuid().ToString('N') + '.stderr.log')
 try {
-    $task | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $plan -Encoding UTF8
+    $planJson = $task | ConvertTo-Json -Depth 20
+    [System.IO.File]::WriteAllText($plan, $planJson, (New-Object System.Text.UTF8Encoding($false)))
     Write-Host 'CAIOS public smoke test: ensure the Example Domain tab is already open in the selected Chrome profile.'
     Write-Host 'When prompted, select ONLY that Example Domain tab and approve it.'
     & $executable @prefix $runner --plan $plan --node $node --mcp-entry $mcp --browser-executable $chrome --stderr-log $log
