@@ -54,7 +54,10 @@ $version = & $executable @prefix --version
 if ($LASTEXITCODE -ne 0 -or $version -notmatch '^Python 3\.') {
     throw 'The selected Python command is not a functional Python 3 runtime'
 }
-$task = Get-Content -LiteralPath $template -Raw | ConvertFrom-Json
+$today = (Get-Date).ToString('MM/dd/yyyy', [System.Globalization.CultureInfo]::InvariantCulture)
+$rawTemplate = Get-Content -LiteralPath $template -Raw
+if (-not $rawTemplate.Contains('__TEST_DATE__')) { throw 'Acceptance template date placeholder missing' }
+$task = $rawTemplate.Replace('__TEST_DATE__', $today) | ConvertFrom-Json
 if ($task.tab_selection -ne 'user_selected' -or
     $task.steps.Count -ne 39 -or
     $task.restore_original_url -or
