@@ -145,7 +145,7 @@
       "arguments": {
         "target": "input[name=\"my-date\"]",
         "element": "Date picker",
-        "text": "11/20/2026"
+        "text": "__TEST_DATE__"
       }
     },
     {
@@ -211,7 +211,7 @@
       "name": "25_commit_datepicker",
       "tool": "browser_evaluate",
       "arguments": {
-        "function": "() => {const e=document.querySelector('input[name=\"my-date\"]');if(!e)throw Error('DATE_MISSING');if(window.jQuery&&typeof window.jQuery(e).datepicker==='function')window.jQuery(e).datepicker('setDate','11/20/2026');else e.value='11/20/2026';e.dispatchEvent(new Event('change',{bubbles:true}));return {dateReady:true};}"
+        "function": "() => {const e=document.querySelector('input[name=\"my-date\"]');if(!e)throw Error('DATE_MISSING');if(window.jQuery&&typeof window.jQuery(e).datepicker==='function')window.jQuery(e).datepicker('setDate','__TEST_DATE__');else e.value='__TEST_DATE__';e.dispatchEvent(new Event('change',{bubbles:true}));return {dateReady:true};}"
       }
     },
     {
@@ -267,7 +267,7 @@
       "name": "33_verify_date",
       "tool": "browser_evaluate",
       "arguments": {
-        "function": "() => {const f=document.querySelector('form'); if(!f) throw Error('FORM_MISSING'); const g=n=>f.querySelector('[name=\"'+n+'\"]'); if(!(g('my-date').value==='11/20/2026'))throw Error('33_VERIFY_DATE_FAILED');return {verified:true};}"
+        "function": "() => {const f=document.querySelector('form'); if(!f) throw Error('FORM_MISSING'); const g=n=>f.querySelector('[name=\"'+n+'\"]'); if(!(g('my-date').value==='__TEST_DATE__'))throw Error('33_VERIFY_DATE_FAILED');return {verified:true};}"
       }
     },
     {
