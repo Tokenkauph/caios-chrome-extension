@@ -417,12 +417,16 @@ def run(args):
                 call(step["tool"], step["arguments"], phase)
             except MCPFault as exc:
                 if exc.code == "tool_returned_error" and step["tool"] in ("browser_navigate", "browser_navigate_back"):
-                    target_url = (original_url if step["tool"] == "browser_navigate_back"
+                    # Explicit intermediate Back navigation can target a page
+                    # reached after the approved starting tab. Do not mistake
+                    # the user's initial URL for that intermediate destination.
+                    back_prefix = step.get("expected_url_prefix")
+                    target_url = (back_prefix or original_url if step["tool"] == "browser_navigate_back"
                                   else step["arguments"].get("url"))
                     if not isinstance(target_url, str) or not target_url.startswith(("https://", "http://")):
                         raise
                     verify_url(target_url, phase + "-verify-after-error",
-                               exact=step["tool"] == "browser_navigate_back")
+                               exact=step["tool"] == "browser_navigate_back" and not back_prefix)
                     recovered = True
                     emit("NAVIGATION_ARRIVAL_CONFIRMED", name=name)
                 else:
