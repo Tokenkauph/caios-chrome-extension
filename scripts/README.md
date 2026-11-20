@@ -6,6 +6,24 @@
 
 For each additional Windows computer, follow the [single repeatable Windows install and live acceptance guide](../docs/windows-host-install-and-acceptance.md). It covers the versioned complete ZIP, checksum and correct Chrome profile, the CAIOS-specific extension ID, the existing shared runner, public test-tab consent, exact pass markers, cleanup and failure diagnosis. **Do not write a new one-off browser test script for each host.** A host-local Playwright PASS is not evidence that a native ChatGPT browser-control Tool was registered.
 
+## Build the reusable Windows release (same runner on every host)
+
+The previously created complete Windows ZIP contains the extension and forked Node/MCP only. The reviewed packager in [package_caios_windows.py](package_caios_windows.py) adds **the exact current canonical Python runner**, one reusable public Example Domain plan, a PowerShell launcher, the launcher instructions, and checksummed smoke metadata, preserving the original complete ZIP unmodified. It **does not** create a new extension implementation, install Python, automatically start Chrome, or register a remote ChatGPT Tool.
+
+After separately verifying the input complete release and its approved SHA-256, run the same packager on the build host (example for the Nov 19 v0.5.0.3 bundle; adjust paths to the actual release):
+
+~~~bash
+python3 scripts/package_caios_windows.py \
+  --base-zip /path/to/verified/caios-chrome-windows-v0.5.0.3-complete.zip \
+  --base-sha256 21b2fa235e4d833bc04a25e1f6382810ca2b75e95c832cd30cbb5040bfb25c3f \
+  --version 0.5.0.3 \
+  --output /path/to/release/caios-chrome-windows-v0.5.0.3-with-smoke.zip
+~~~
+
+The packager rejects a bad digest, incomplete or mismatched CAIOS release, unsafe/duplicate archive paths, already-bundled smoke tooling, and an existing output path. It re-verifies its own ZIP after creation, compares the embedded files byte-for-byte with this repository's canonical sources, and outputs its **new SHA-256** for subsequent host transfer verification. Do not use the **old input archive checksum** to validate the enhanced output ZIP.
+
+**Windows use:** the enhanced ZIP has a new smoke/ directory; after unpacked Chrome registration, open https://example.com/ in a disposable tab and run smoke/run-smoke.ps1 with the real -Profile name. It selects Python 3 already installed on that host, prepares a temporary plan containing the actual computer name/profile, and launches the bundled exact canonical runner. User consent still selects one tab. See the [complete Windows procedure](../docs/windows-host-install-and-acceptance.md). Python 3 is a declared Windows runtime prerequisite; do not invent a second Node browser runner to hide it.
+
 ## Mandatory order for every approved browser operation
 
 1. **Before requesting consent**, prepare exact host, Chrome profile, pre-opened target tab, CAIOS extension and matching forked client, complete authorized operation, and cleanup/recovery steps. Finish all unrelated GitHub/docs/Neon checks **before** opening the consent picker.
