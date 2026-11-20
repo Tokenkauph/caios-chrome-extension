@@ -82,7 +82,7 @@ class StandardInstallAcceptanceTests(unittest.TestCase):
         self.assertIn("Set-Location -LiteralPath $PSScriptRoot", script)
         self.assertIn("CAIOS_ACCEPTANCE_EXIT_CODE", script)
         self.assertNotIn("Start-Process", script)
-        self.assertNotIn("expected_url_prefix", raw)
+        self.assertEqual(self.plan["steps"][4]["expected_url_prefix"], "https://www.msn.com/")
 
     def test_bundle_includes_mandatory_acceptance_tools(self):
         package = SCRIPTS / "package_caios_windows.py"
