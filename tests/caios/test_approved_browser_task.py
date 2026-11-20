@@ -28,7 +28,7 @@ if mode == "restore_prefix_collision":
     urls[1] = "https://www.google.com/page?item=123"
 titles = {0: "Other account", 1: "Google"}
 history = {0: [], 1: []}
-if mode == "user_selected_arbitrary":
+if mode in ("user_selected_arbitrary", "user_selected_intermediate_back_error"):
     urls = {0: "https://user-chosen.example/path"}
     titles = {0: "User-selected site"}
     history = {0: []}
@@ -157,7 +157,7 @@ for line in sys.stdin:
                 readiness_lag = 1
             if mode == "diagnostic_late_ready":
                 readiness_lag = 6
-            if mode == "back_arrived_error":
+            if mode in ("back_arrived_error", "user_selected_intermediate_back_error"):
                 reply(req, {"isError": True, "content": [{"type": "text", "text": "Navigation error"}]})
                 continue
             reply(req, {"content": [{"type": "text", "text": "Done"}]})
@@ -311,6 +311,33 @@ class ApprovedTaskTests(unittest.TestCase):
         r, _, trace = self.run_task({"tab_selection": "user_selected"}, mode="user_selected_crashed")
         self.assertEqual(r.returncode, 1)
         self.assertFalse(any(line.startswith("tabs_select") for line in trace))
+
+    def test_intermediate_back_recovers_to_first_visited_site_not_user_initial_site(self):
+        # Starting tab can be any user-selected site. The Back destination is
+        # MSN, which is not the initial tab and may return a spurious MCP error.
+        steps = [
+            {"name": "first", "tool": "browser_navigate",
+             "arguments": {"url": "https://www.msn.com/"}},
+            {"name": "second", "tool": "browser_navigate",
+             "arguments": {"url": "https://en.wikipedia.org/wiki/European_badger"}},
+            {"name": "back_to_first", "tool": "browser_navigate_back",
+             "arguments": {}, "expected_url_prefix": "https://www.msn.com/"},
+            {"name": "verify", "tool": "browser_evaluate",
+             "arguments": {"function": "read"}},
+        ]
+        r, events, trace = self.run_task({
+            "tab_selection": "user_selected",
+            "restore_original_url": False,
+            "finally_steps": [],
+            "steps": steps,
+        }, mode="user_selected_intermediate_back_error")
+        self.assertEqual(r.returncode, 0, r.stdout)
+        self.assertEqual([event["event"] for event in events].count("ACTION_DONE"), 4)
+        self.assertTrue(any(event["event"] == "NAVIGATION_ARRIVAL_CONFIRMED"
+                            and event["name"] == "back_to_first" for event in events))
+        self.assertEqual(trace.count("navigate_back"), 1)
+        self.assertNotIn("navigate_https://user-chosen.example/path", trace)
+        self.assertNotIn("https://user-chosen.example/path", r.stdout)
 
     def test_wrong_title_blocks_before_selection(self):
         r, ev, trace = self.run_task({"expected_title": "Private account"})
