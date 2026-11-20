@@ -1,22 +1,38 @@
-# CAIOS Chrome Extension Windows smoke test
+# CAIOS Chrome Extension — Windows acceptance tests
 
-This directory is **bundled by** [scripts/package_caios_windows.py](../../scripts/package_caios_windows.py) into each verified complete Windows release. It includes the **unmodified canonical Python runner** from scripts/caios_approved_browser_task.py and its public Example Domain test plan. Do **not** write a new per-host runner.
+This folder is bundled by [package_caios_windows.py](../../scripts/package_caios_windows.py). It uses the **single canonical Python browser runner** and the matching forked Node/Playwright MCP from the installed CAIOS release. Do not invent a per-host controller.
 
-**November 19 Quantum Haze receipt:** The installed CAIOS v0.5.0.3 Chrome `Default` human-profile controller **PASSED** an approved Example Domain snapshot → navigate to `https://example.org/` → destination snapshot → original URL restoration → controller release (**3/3**, exit **0**, no cleanup errors). [Engineering #201 verified evidence](https://github.com/Tokenkauph/caios/issues/201#issuecomment-7029072376). The host had locally corrected its Python 3.14 selection and transcript logging; the local plan uses the three simple canonical steps. **The already-published `v0.5.0.3-smoke.1` ZIP predates those changes.** Do not represent it as containing the exact accepted corrected launcher/plan until source and new asset are synchronized and verified.
+## Required for every new extension installation: real-world acceptance
 
-1. Extract the complete approved Windows release, check its recorded release checksum, and load **extension/** into the intended user's Chrome profile using chrome://extensions → Developer mode → Load unpacked. Verify the enabled CAIOS extension ID **kanpfbepfgcpmjoeaaihigjkcdjejbld**; keep Microsoft's separate extension.
-2. Verify Python **3** is already available via Windows py.exe or python.exe; the v0.5.0.3 full ZIP bundles Node but does **not** bundle Python. The launcher will **not** install Python or register a service.
-3. Open **https://example.com/** in a disposable tab in the exact intended profile; do not select a signed-in tab.
-4. In regular PowerShell on that exact machine, run:
+After verifying the extension is installed, enabled and paired with the exact Chrome profile and matching controller, use **run-acceptance.ps1**. It must run in the interactive session of the installed user's Chrome profile. Prepare scripts, dependencies and diagnostic logging **before** any browser tab consent or visible desktop interruption. Do not unexpectedly launch or focus windows on an occupied desktop.
 
-   ~~~powershell
-   & "$env:LOCALAPPDATA\CAIOS\ChromeExtension\v0.5.0.3\smoke\run-smoke.ps1" -Profile Default
-   ~~~
+The user is free to approve **any one website tab** in the CAIOS Chrome picker. The tab's original title or URL is not a constraint; **never require Example Domain, MSN or Google as the starting tab**. One tab only is required for this test. Nothing is approved by merely running the script.
 
-   Change the path to the version actually installed and **-Profile** to the actual directory name shown in chrome://version. The script generates a task-owned plan from the bundled template with your verified hostname and explicit Chrome profile, then launches the **same canonical runner** with the matching bundled Node and Playwright MCP. No Chrome credential or approval token is read.
-5. **Before requesting Chrome consent**, explicitly tell the user the exact disposable tab to select: **Example Domain (`https://example.com/`)**, not their ChatGPT conversation or the CAIOS connection page. If the user is working on the machine, prepare everything off-screen, announce the short separately approved desktop interruption immediately before it, verify actual PowerShell foreground handle/PID before typing and Enter, and stop if focus changed. Then select **only** the Example Domain tab and approve. The corrected host-local three-step runner performs original page snapshot → navigate to `https://example.org/` → destination snapshot, and restores the original URL. No additional browser-evaluate assertion was necessary for verified acceptance.
-6. A true PASS requires **MCP_TAB_ATTACHED**, **APPROVED_TARGET_VERIFIED**, **ACTION_DONE** for all intended steps, **ORIGINAL_URL_RESTORED**, **TASK_COMPLETED** and **TASK_SESSION_RELEASED**, along with actual positive public-page content/navigation evidence. A successful MCP initialize or tab picker alone is not acceptance.
+From normal PowerShell on the target Windows user session:
 
-A task-local stderr log is left in %TEMP% for genuine errors; it may contain connection details, so do not paste it into public issue reports. The proven Quantum Haze host-local launcher additionally writes `smoke/run-smoke-latest.log` from PowerShell preflight, but the current published ZIP does **not** yet include that change. The generated plan is removed. Chrome remains running and the runner terminates only its task-owned MCP. The native ChatGPT-to-host browser Tool remains a separate capability and is **not** installed by this package.
+```powershell
+& "$env:LOCALAPPDATA\CAIOS\ChromeExtension\v0.5.0.3\smoke\run-acceptance.ps1" -Profile Default
+```
 
-Owner/diagnosis: [Engineering #201](https://github.com/Tokenkauph/caios/issues/201); [full repeatable Windows install and test guide](../../docs/windows-host-install-and-acceptance.md).
+Change the versioned installation path and `-Profile` to the actual installed release and Chrome profile. Python 3 is a prerequisite; the ZIP bundles the matching Node/MCP but not Python. The launcher checks release identity, prefers the actual user-local Python installation over Windows Store aliases, generates a task-owned plan with the **actual** computer name and current form date, switches the MCP working directory to the bundled harmless upload fixture, and starts exactly one canonical runner. It does **not** open Chrome, select a tab automatically, bypass consent, or create a background service.
+
+Once the user chooses one tab and clicks **Connect selected tabs**, this single process immediately:
+
+1. Opens **https://www.msn.com/** and verifies the first website.
+2. Opens **https://en.wikipedia.org/wiki/European_badger** and verifies the second website.
+3. Uses the real browser **Back** action, and verifies that the first MSN website is visible again.
+4. Navigates to the public [Selenium web form](https://www.selenium.dev/selenium/web/web-form.html), inspects its controls and takes a snapshot.
+5. Fills all editable control families with **dummy data**: text, dummy password, textarea, select dropdown, datalist, both checkboxes, alternate radio, date picker, color input, range slider, and bundled harmless file upload. It verifies each field/group independently and confirms disabled, read-only and hidden inputs were not altered.
+6. Clicks **Submit** and independently verifies the real submitted-form page displays **Received!**.
+
+This 39-step plan exercises navigation across sites, Back/history, interactive input, upload and submission in an ordinary user-authorized tab. The successful submission page remains visible; this suite deliberately has `restore_original_url: false`. A task that is specifically meant to restore the starting URL should use a different explicitly authorized plan. The runner always releases its own MCP client after success or failure; it does not close Chrome.
+
+**PASS criteria:** An actual approved tab is attached and verified; both distinct sites load; browser Back returns to the first; all 39 primary actions emit `ACTION_DONE`, including all form checks and the submission confirmation; `TASK_COMPLETED` reports 39/39 with zero cleanup failures; `TASK_SESSION_RELEASED` occurs; runner exit code is 0. A launch, browser picker, mock-unit-test PASS or partial form fill **does not count**. Record precise failures and keep any connection/error logs local, without publishing private starting URLs or credentials.
+
+## Optional troubleshooting only: simple public-page smoke
+
+`run-smoke.ps1` and `caios-example-domain-smoke.template.json` remain for targeted diagnostics and historical comparison, **not as the installation acceptance gate**. That legacy test intentionally requires a disposable `https://example.com/` tab. The restriction is specific to that legacy fixture, not the normal browser controller or standard full acceptance.
+
+The November 19, 2026 Quantum Haze historical receipt recorded a successful 3-step host-local smoke (with two local corrections). The old published `v0.5.0.3-smoke.1` ZIP predates the new mandatory suite, even if it is still present on a host. A newly built bundle from the reviewed source will have the full suite; do not treat source publication as installed/working on any machine.
+
+**Owners:** [CAIOS Engineering #201](https://github.com/Tokenkauph/caios/issues/201), [complete Windows install guide](../../docs/windows-host-install-and-acceptance.md), and [canonical runner instructions](../../scripts/README.md).
