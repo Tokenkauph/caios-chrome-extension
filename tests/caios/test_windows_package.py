@@ -49,7 +49,7 @@ class WindowsReleaseSmokePackageTest(unittest.TestCase):
         report = self.build(sha)
         self.assertTrue(self.out.is_file())
         self.assertEqual(report["base_archive_sha256"], sha)
-        self.assertEqual(report["smoke_files"], 5)
+        self.assertEqual(report["smoke_files"], 8)
         with zipfile.ZipFile(self.out) as z:
             self.assertIsNone(z.testzip())
             self.assertEqual(
@@ -68,6 +68,19 @@ class WindowsReleaseSmokePackageTest(unittest.TestCase):
             self.assertTrue(plan["restore_original_url"])
             self.assertIn(b"WriteAllText", z.read("smoke/run-smoke.ps1"))
             self.assertIn(b"UTF8Encoding($false)", z.read("smoke/run-smoke.ps1"))
+            # The full real-world acceptance is REQUIRED for new installs;
+            # the historical Example Domain quick smoke remains optional.
+            acceptance = json.loads(z.read("smoke/caios-install-acceptance.template.json"))
+            self.assertEqual(acceptance["tab_selection"], "user_selected")
+            self.assertNotIn("expected_url_prefix", acceptance)
+            self.assertNotIn("expected_title", acceptance)
+            self.assertFalse(acceptance["restore_original_url"])
+            self.assertEqual(len(acceptance["steps"]), 39)
+            self.assertEqual(acceptance["steps"][0]["arguments"]["url"], "https://www.msn.com/")
+            self.assertEqual(acceptance["steps"][4]["tool"], "browser_navigate_back")
+            self.assertEqual(acceptance["steps"][-1]["name"], "39_verify_received")
+            self.assertIn(b"harmless dummy file", z.read("smoke/caios-install-acceptance-upload.txt"))
+            self.assertIn(b"Set-Location", z.read("smoke/run-acceptance.ps1"))
             meta = json.loads(z.read("smoke/CAIOS-SMOKE-RELEASE.json"))
             self.assertEqual(meta["base_archive_sha256"], sha)
             self.assertEqual(meta["extension_id"], pack.EXTENSION_ID)
