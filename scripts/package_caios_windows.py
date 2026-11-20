@@ -25,6 +25,9 @@ SMOKE_FILES = {
     "smoke/caios_approved_browser_task.py": "caios_approved_browser_task.py",
     "smoke/caios-example-domain-smoke.template.json": "windows-smoke/caios-example-domain-smoke.template.json",
     "smoke/run-smoke.ps1": "windows-smoke/run-smoke.ps1",
+    "smoke/caios-install-acceptance.template.json": "windows-smoke/caios-install-acceptance.template.json",
+    "smoke/caios-install-acceptance-upload.txt": "windows-smoke/caios-install-acceptance-upload.txt",
+    "smoke/run-acceptance.ps1": "windows-smoke/run-acceptance.ps1",
     "smoke/README.md": "windows-smoke/README.md",
 }
 
