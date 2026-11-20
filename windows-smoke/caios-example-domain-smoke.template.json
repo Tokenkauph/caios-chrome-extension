@@ -1,0 +1,29 @@
+{
+  "contract_version": "1",
+  "machine": "__TARGET_HOST__",
+  "profile": "__CHROME_PROFILE__",
+  "extension_id": "kanpfbepfgcpmjoeaaihigjkcdjejbld",
+  "expected_title": "Example Domain",
+  "expected_url_prefix": "https://example.com/",
+  "restore_original_url": true,
+  "steps": [
+    {
+      "name": "read_public",
+      "tool": "browser_snapshot",
+      "arguments": {}
+    },
+    {
+      "name": "navigate_public",
+      "tool": "browser_navigate",
+      "arguments": {
+        "url": "https://example.org/"
+      }
+    },
+    {
+      "name": "read_destination",
+      "tool": "browser_snapshot",
+      "arguments": {}
+    }
+  ],
+  "finally_steps": []
+}
