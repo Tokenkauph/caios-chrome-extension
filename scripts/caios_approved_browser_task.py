@@ -43,9 +43,22 @@ def read_plan(path: pathlib.Path):
     plan = json.loads(path.read_text(encoding="utf-8"))
     if plan.get("contract_version") != "1":
         raise ValueError("Unsupported task plan version")
-    for key in ("machine", "profile", "extension_id", "expected_title", "expected_url_prefix"):
+    for key in ("machine", "profile", "extension_id"):
         if not isinstance(plan.get(key), str) or not plan[key].strip():
-            raise ValueError(f"Missing {key}; never infer a browser target")
+            raise ValueError(f"Missing {key}; never infer the browser host/profile")
+    # The Chrome consent picker is authoritative for ordinary user-selected
+    # tabs. Preserve explicit title/URL pinning for legacy scripted fixtures.
+    mode = plan.get("tab_selection")
+    if mode is None:
+        mode = ("pinned" if "expected_title" in plan or "expected_url_prefix" in plan
+                else "user_selected")
+    if mode not in ("pinned", "user_selected"):
+        raise ValueError("tab_selection must be pinned or user_selected")
+    if mode == "pinned":
+        for key in ("expected_title", "expected_url_prefix"):
+            if not isinstance(plan.get(key), str) or not plan[key].strip():
+                raise ValueError(f"Missing {key} for a pinned tab")
+    plan["tab_selection"] = mode
     if "restore_original_url" in plan and not isinstance(plan["restore_original_url"], bool):
         raise ValueError("restore_original_url must be boolean")
     for field in ("steps", "finally_steps"):
@@ -82,6 +95,17 @@ def exact_target(tabs, title, url_prefix):
     if len(matches) != 1:
         raise MCPFault("approved_tab_missing_or_ambiguous", "tab-identification")
     return matches[0]
+
+
+def approved_target(tabs, plan):
+    if plan["tab_selection"] == "pinned":
+        return exact_target(tabs, plan["expected_title"], plan["expected_url_prefix"])
+    # Only one non-crashed tab may be attached to this one-tab task. Never
+    # guess among several tabs or silently choose a different Chrome tab.
+    available = [tab for tab in tabs if not tab["crashed"]]
+    if len(available) != 1:
+        raise MCPFault("approved_tab_missing_or_ambiguous", "tab-identification")
+    return available[0]
 
 
 class MCP:
@@ -263,19 +287,21 @@ def run(args):
             raise MCPFault("required_tool_unavailable", current_stage)
 
         emit("READY_FOR_CONSENT", profile=plan["profile"],
-             target_title=plan["expected_title"], attachment_state="unconfirmed")
+             selection_mode=plan["tab_selection"], attachment_state="unconfirmed")
         current_stage = "approval-and-tab-attachment"
         consent_start = time.monotonic()
         first_tabs = tabs_from_result(call("browser_tabs", {"action": "list"}, current_stage,
                                            args.approval_timeout))
-        target = exact_target(first_tabs, plan["expected_title"], plan["expected_url_prefix"])
+        target = approved_target(first_tabs, plan)
         emit("MCP_TAB_ATTACHED", elapsed_seconds=round(time.monotonic() - consent_start, 3))
         current_stage = "approved-tab-select"
         select_started = time.monotonic()
         call("browser_tabs", {"action": "select", "index": target["index"]}, current_stage)
         current_stage = "approved-tab-verify"
         current_tabs = tabs_from_result(call("browser_tabs", {"action": "list"}, current_stage))
-        selected = exact_target(current_tabs, plan["expected_title"], plan["expected_url_prefix"])
+        selected = approved_target(current_tabs, plan)
+        if selected["index"] != target["index"]:
+            raise MCPFault("approved_tab_changed", current_stage)
         if not selected["current"]:
             raise MCPFault("approved_tab_not_active", current_stage)
         def scalar_results(result):
@@ -304,7 +330,10 @@ def run(args):
                 live_url = json.loads(values[0].strip())
             except (ValueError, TypeError):
                 raise MCPFault("original_url_unavailable", "capture-original-url") from None
-            if not isinstance(live_url, str) or not live_url.startswith(plan["expected_url_prefix"]):
+            if not isinstance(live_url, str) or not live_url.startswith(("https://", "http://")):
+                raise MCPFault("original_url_unavailable", "capture-original-url")
+            if (plan["tab_selection"] == "pinned"
+                    and not live_url.startswith(plan["expected_url_prefix"])):
                 raise MCPFault("original_url_not_approved", "capture-original-url")
             emit("ORIGINAL_URL_CAPTURED", source="live_document",
                  tab_list_comparison="exact" if live_url == selected["url"] else "different")

@@ -8,7 +8,7 @@
 
 **Source vs deployed state:** The verified Quantum Haze `smoke/run-smoke.ps1` was locally adjusted to select the installed user Python 3.14 binary before Windows Store aliases and save a preflight transcript (`smoke/run-smoke-latest.log`). Its local test JSON was simplified to **snapshot → navigate → snapshot** because a redundant `browser_evaluate` assertion returned an error. **Those locally proven changes are not yet part of the published `v0.5.0.3-smoke.1` ZIP nor this repo's packaged launcher/plan source.** Sync and verify changes before a new release; do not claim the old ZIP was end-to-end accepted. [Windows guide](../docs/windows-host-install-and-acceptance.md).
 
-**Coordination during live use:** Prepare source, task and exact host/profile/tab off-screen. Immediately before an approved short desktop focus interruption, tell the user the exact window and the only tab to approve (**Example Domain**). Execute the prepared launch immediately and verify foreground handle/PID before every typing/Enter action; stop if focus shifted. A desktop-control lease is not consent to surprise the user while they are working or playing. The same controller automatically runs the already-prepared steps after Chrome approval, and releases only the owned session.
+**Coordination during live use:** Prepare source, task and exact host/profile off-screen. The user chooses which Chrome tab to approve. An Example Domain requirement is only for a separately agreed public smoke test, never a default for normal browsing. Immediately before any approved visible desktop focus interruption, identify the exact host/window. Execute the prepared launch immediately and verify foreground handle/PID before every typing/Enter action; stop if focus shifted. A desktop-control lease is not consent to surprise the user while they are working or playing. The same controller automatically runs the already-prepared steps after Chrome approval, and releases only the owned session.
 
 
 For each additional Windows computer, follow the [single repeatable Windows install and live acceptance guide](../docs/windows-host-install-and-acceptance.md). It covers the versioned complete ZIP, checksum and correct Chrome profile, the CAIOS-specific extension ID, the existing shared runner, public test-tab consent, exact pass markers, cleanup and failure diagnosis. **Do not write a new one-off browser test script for each host.** A host-local Playwright PASS is not evidence that a native ChatGPT browser-control Tool was registered.
@@ -35,13 +35,13 @@ The packager rejects a bad digest, incomplete or mismatched CAIOS release, unsaf
 
 **The Chrome tab approval and the Windows foreground-console interruption are different events.** Complete host/script/package/version checks before asking to focus or open PowerShell. When a visible launch is truly necessary, tell Ryan the exact target computer/window and disposable Example Domain tab **immediately before** the prepared launch; aim to initiate within 10 seconds of the ready signal (not a guaranteed platform timer). Never return several minutes later and unexpectedly open a window or type under an earlier broad task approval. If delayed, abort that foreground attempt and coordinate another brief interruption when actually ready; do not repeat approval for the whole task. Before typing or Enter, independently check the foreground target. If the user switched to another application, stop rather than auto-refocus or send blind input. Release task-owned desktop control promptly. Prefer a supported non-foreground host execution route when it achieves the same authorized purpose.
 
-After the single task-owned MCP client is already waiting, the user's **actual choice of the specific Chrome tab** is the browser consent event; once the matching client returns that approved tab, the existing prepared runner immediately acts and releases its own session. The 900-second browser attachment wait is **not** permission to queue delayed Windows foreground input or to leave a live window takeover open. Preserve selected-tab consent and the current owner/host boundaries.
+After the single task-owned MCP client is already waiting, the user's **actual choice of the specific Chrome tab** is the browser consent event; do not substitute a preselected website. Once the matching client returns that approved tab, the existing prepared runner immediately acts and releases its own session. The 900-second browser attachment wait is **not** permission to queue delayed Windows foreground input or to leave a live window takeover open. Preserve selected-tab consent and the current owner/host boundaries.
 
 ## Mandatory order for every approved browser operation
 
-1. **Before requesting consent**, prepare exact host, Chrome profile, pre-opened target tab, CAIOS extension and matching forked client, complete authorized operation, and cleanup/recovery steps. Finish all unrelated GitHub/docs/Neon checks **before** opening the consent picker.
+1. **Before requesting consent**, prepare exact host, Chrome profile, CAIOS extension and matching forked client; do not require a predetermined tab website for ordinary tasks, complete authorized operation, and cleanup/recovery steps. Finish all unrelated GitHub/docs/Neon checks **before** opening the consent picker.
 2. **One task-owned MCP client and one approval:** start the shared runner with a prebuilt plan; it initiates browser_tabs(action=list) and waits for the selected tab. The extension picker may refresh tabs opened later; it never grants access automatically.
-3. **Approval has exclusive priority:** when MCP returns the approved tab, validate its exact title/URL and **immediately execute the prepared actions in the same process**, without another chat message or terminal instruction. No unrelated work between consent and operation.
+3. **Approval has exclusive priority:** when MCP returns the approved tab, verify its unique attached-tab identity/current index (and validate a specified URL/title only in an explicitly pinned test), then **immediately execute the prepared actions in the same process**, without another chat message or terminal instruction. No unrelated work between consent and operation.
 4. **Status/timeout:** default 900 seconds for task-side approval and attachment, replacing the temporary test harness's 180 seconds. Print a progress event every 15 seconds. A timeout means **MCP did not confirm tab attachment**; never assert the user failed to approve. Do not start an unrequested second approval or bypass tab consent.
 5. **After the task:** release only the task-owned client, verify results, then reconcile documentation. Existing Chrome tabs/profiles and Microsoft's independent extension remain intact.
 
@@ -57,8 +57,7 @@ Plan JSON, authored for a **specific already authorized** task:
   "machine": "nexus-forge",
   "profile": "Default",
   "extension_id": "kanpfbepfgcpmjoeaaihigjkcdjejbld",
-  "expected_title": "Google",
-  "expected_url_prefix": "https://www.google.com/",
+  "tab_selection": "user_selected",
   "restore_original_url": false,
   "steps": [
     {"name": "inspect", "tool": "browser_evaluate",
@@ -68,7 +67,7 @@ Plan JSON, authored for a **specific already authorized** task:
 }
 ~~~
 
-The example is **not** blanket approval to access Google or any account. User authorization, exact machine/profile and selected tab still control. Plan steps must be prepared and validated before consent.
+The example does **not** grant access to any account. The user's actual browser-picker selection, task authorization and exact machine/profile control. For ordinary tasks, omit `expected_title` and `expected_url_prefix`: the default is `user_selected`. The runner accepts the **one approved tab** regardless of its title, starting URL or site. If zero, multiple, or crashed tabs are returned, it stops rather than guessing. Legacy plans that explicitly supply expected title/URL retain `pinned` matching, and a plan may explicitly set `tab_selection: pinned`. Use title/URL pinning only when the **user's task itself** requires that starting website, such as a designated public smoke fixture. The user's selected tab may be on any supported HTTP(S) site; don't print or store its private starting URL in public receipts. Plan steps must be prepared and validated before consent.
 
 Run with OS-local paths and exact task-owned files:
 
