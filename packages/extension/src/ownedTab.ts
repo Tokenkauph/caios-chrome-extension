@@ -21,6 +21,13 @@ const NON_DEBUGGABLE_SCHEMES = ['chrome:', 'edge:', 'devtools:'];
 const REANNOUNCE_DELAY_MS = 150;
 const REANNOUNCE_COOLDOWN_MS = 3000;
 
+// Chrome's built-in New Tab is not debuggable until navigated to an ordinary page.
+// It is the only Chrome-internal page eligible for conversion after explicit selection.
+export function isChromeNewTabUrl(url: string | undefined): boolean {
+  return url === 'chrome://newtab' || url === 'chrome://newtab/'
+      || url === 'chrome://new-tab-page' || url === 'chrome://new-tab-page/';
+}
+
 export function isDebuggableUrl(url: string | undefined): boolean {
   return !NON_DEBUGGABLE_SCHEMES.some(scheme => url?.startsWith(scheme));
 }
