@@ -12,6 +12,14 @@ Four distinct checkpoints: **machine identity → actual Chrome profile → comp
 
 CAIOS extension ID: **kanpfbepfgcpmjoeaaihigjkcdjejbld**. Existing independent Microsoft extension ID: **mmlmfjhmonkocbjadbfplnigmagldckm**. Keep Microsoft's extension. The canonical runner explicitly targets the CAIOS extension and removes optional token-based approval bypass.
 
+## Windows release format and reuse
+
+**Preferred reusable Windows bundle (built and inspected on physical Nexus Forge, Nov 19):** caios-chrome-windows-v0.5.0.3-with-smoke-final.zip, **37,321,806 bytes**, SHA-256 **6c0808d3d4f7fb5515e6effa6dfa4fd0748107a29465a431b9feccb3d7eb8a98**. This is a **locally built, verified candidate**, not a claim of a published GitHub release or installed update. Its five added smoke/ entries contain the exact unchanged canonical Python runner, a public-page test plan, a PowerShell launcher, a README and checksummed smoke metadata. All **75 entries of the original package remain unchanged**; archive integrity and exact runner byte match were independently verified.
+
+**Older base ZIP:** caios-chrome-windows-v0.5.0.3-complete.zip, SHA-256 **21b2fa235e4d833bc04a25e1f6382810ca2b75e95c832cd30cbb5040bfb25c3f**, contains Node/MCP/extension but **no** smoke runner/plan. Do not apply the older base ZIP's hash to the enhanced ZIP. When making later Windows releases, use the same **[release packager](../scripts/package_caios_windows.py)** with the correct reviewed source ZIP/digest and source version. The packager refuses mixed versions, bad input SHA, unsafe members, duplicate smoke tools and output overwrite.
+
+On an approved host receiving an **enhanced** ZIP, after loading its unpacked extension and verifying its ID, open https://example.com/ in a disposable tab and run the bundled **smoke/run-smoke.ps1** with the real -Profile name from chrome://version. Only a normal local Python 3 interpreter is needed in addition to the included Node/MCP; the launcher creates a per-host task plan and invokes the canonical runner. It does not install Python, bypass Chrome's selected-tab approval, or create a service. Actual host-local acceptance and a native direct ChatGPT Tool are separate gates.
+
 ## A. One-time Windows installation
 
 1. **Resolve and verify the approved host.** Read exact hostname, logged-in Windows user, existing Chrome profile and allowed host Tool route. The physical Nexus Forge Ubuntu, Quantum Haze Windows, Plex Windows and Forge Windows VM are distinct. Do not use retired Windows-Dev1 or administrator recovery SSH as fallback. A Windows Desktop controller lease is not GUI consent.
@@ -20,7 +28,7 @@ CAIOS extension ID: **kanpfbepfgcpmjoeaaihigjkcdjejbld**. Existing independent M
 
    ~~~powershell
    $zip = '<approved-full-release-zip-path>'
-   $sha = '21b2fa235e4d833bc04a25e1f6382810ca2b75e95c832cd30cbb5040bfb25c3f'
+   $sha = '<approved-digest-of-the-actual-delivered-zip>'
    if (-not (Test-Path -LiteralPath $zip -PathType Leaf)) { throw 'Full release ZIP missing' }
    if ((Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash -ne $sha) { throw 'Release checksum mismatch' }
    $root = Join-Path $env:LOCALAPPDATA 'CAIOS\ChromeExtension\v0.5.0.3'
@@ -49,7 +57,7 @@ CAIOS extension ID: **kanpfbepfgcpmjoeaaihigjkcdjejbld**. Existing independent M
 
    Nov 19 Quantum Haze verified **Node v24.22.3**, **Playwright MCP Version 1.66.0-next**, **extension 0.5.0.3**. Keep previous release folders for rollback.
 5. **Register the unpacked extension in the correct *user* Chrome profile.** In Chrome inspect **chrome://version → Profile Path** (Quantum Haze RStires used Default). Then **chrome://extensions → Developer mode → Load unpacked**. Select the **extension** folder under the version folder, e.g. C:\Users\rstires\AppData\Local\CAIOS\ChromeExtension\v0.5.0.3\extension. Confirm visible **CAIOS Chrome Extension** card, correct version and **ID kanpfbepfgcpmjoeaaihigjkcdjejbld**, and **enabled**. Keep the Microsoft extension and all other Chrome profiles. **Important:** an unpacked extension may not appear in the on-disk Default\Extensions directory; its absence from that directory is NOT an installation failure. Use the real Chrome extension-management card.
-6. **Use the existing host-local controller/runner.** The 0.5.0.3 complete ZIP includes bundled Node and forked MCP, **not a verified local Python runner or Python 3 interpreter**. Resolve Python 3 and use the existing reviewed repository runner below through an authorized host-local execution route. Do not assume Windows Desktop launch_app executes PowerShell scripts: a previous compound launch did not produce an execution receipt and a different VBScript launcher was explicitly denied. A denied tool is not permission for an alternative credential, privileged SSH or GUI trick.
+6. **Use the existing host-local controller/runner.** The **enhanced Windows ZIP** includes the exact canonical runner, plan and PowerShell launcher; the **older base ZIP** contains Node/MCP but not the runner. Neither includes Python 3. Resolve Python 3 and use the existing reviewed repository runner below through an authorized host-local execution route. Do not assume Windows Desktop launch_app executes PowerShell scripts: a previous compound launch did not produce an execution receipt and a different VBScript launcher was explicitly denied. A denied tool is not permission for an alternative credential, privileged SSH or GUI trick.
 
 ## B. Same smoke test on every new approved host
 
@@ -77,7 +85,7 @@ CAIOS extension ID: **kanpfbepfgcpmjoeaaihigjkcdjejbld**. Existing independent M
    }
    ~~~
 
-3. **Start the canonical runner** from the verified CAIOS repo checkout; require a real Python 3 executable and one pre-verified approved file path for the JSON plan. In Windows PowerShell:
+3. **Start the canonical runner.** **Preferred on a host with the enhanced ZIP:** run the bundled smoke/run-smoke.ps1 -Profile <verified Chrome directory name>; it generates the plan for the verified host/profile and calls the same embedded canonical Python runner. The manual repository-checkout command below applies **only to older packages without the bundled smoke directory**; require Python 3 in either case. In Windows PowerShell:
 
    ~~~powershell
    $repo = '<verified-local-caios-chrome-extension-checkout>'
@@ -119,4 +127,4 @@ CAIOS extension ID: **kanpfbepfgcpmjoeaaihigjkcdjejbld**. Existing independent M
 
 Record each verified host once in existing [Engineering #201](https://github.com/Tokenkauph/caios/issues/201) and applicable host record: approved target/profile, exact package hash/version/ID, matching forked MCP, canonical runner source revision, Chrome card enabled state, approved tab/title/URL, actual read/navigation/restore/cleanup results, native Tool connectivity and blockers. No new tracker, additional fork, or one-off browser harness for each computer.
 
-**Future implementation, NOT delivered by this document:** package the already-reviewed canonical runner and one reusable public smoke-test plan with every Windows release, or provide an equivalent approved native host-local launch interface. The current Windows bundle does not include Python/the runner; this is the remaining setup friction to eliminate under #201. Publishing documentation does not install a service, activate a direct ChatGPT Tool or qualify an untested machine.
+**Release packaging improvement implemented as a tested source candidate:** the packager and standard smoke tools are in this repository's Windows release workflow; the Nov 19 enhanced ZIP was built and independently inspected on physical Forge, as above. It is **not automatically installed on Quantum Haze or published as a GitHub release** by the existence of these source files. Python 3 remains a host prerequisite; a native ChatGPT-to-Quantum-Haze browser Tool remains separate. After source integration, use the enhanced release artifact and exact SHA for future approved Windows installations, not the old extension-only or base ZIP.
