@@ -28,6 +28,14 @@ if mode == "restore_prefix_collision":
     urls[1] = "https://www.google.com/page?item=123"
 titles = {0: "Other account", 1: "Google"}
 history = {0: [], 1: []}
+if mode == "user_selected_arbitrary":
+    urls = {0: "https://user-chosen.example/path"}
+    titles = {0: "User-selected site"}
+    history = {0: []}
+elif mode == "user_selected_crashed":
+    urls = {0: "https://user-chosen.example/path"}
+    titles = {0: "User-selected site"}
+    history = {0: []}
 stale_restore_listing = 0
 readiness_lag = 0
 after_navigation = False
@@ -54,6 +62,8 @@ def tab_list():
         lines.append("- 2: [Google](https://www.google.com/)")
     if mode == "crashed":
         lines = [value + " [crashed]" if "[Google]" in value else value for value in lines]
+    if mode == "user_selected_crashed":
+        lines = [value + " [crashed]" for value in lines]
     return "\n".join(lines)
 for line in sys.stdin:
     req = json.loads(line)
@@ -254,6 +264,53 @@ class ApprovedTaskTests(unittest.TestCase):
         self.assertEqual(done["primary_steps_completed"], 3)
         self.assertEqual(done["cleanup_steps_completed"], 1)
         self.assertEqual(ev[-1]["event"], "TASK_SESSION_RELEASED")
+
+    def test_user_selected_tab_accepts_arbitrary_title_and_url(self):
+        r, ev, trace = self.run_task({
+            "tab_selection": "user_selected",
+            "expected_title": "A different test-only title",
+            "expected_url_prefix": "https://example.com/",
+            "finally_steps": [],
+        }, mode="user_selected_arbitrary")
+        self.assertEqual(r.returncode, 0, r.stdout)
+        self.assertIn("tabs_select_0", trace)
+        self.assertTrue(any(e["event"] == "APPROVED_TARGET_VERIFIED" for e in ev))
+        self.assertTrue(any(e["event"] == "ORIGINAL_URL_RESTORED" for e in ev))
+        self.assertNotIn("https://user-chosen.example/path", r.stdout)
+
+    def test_user_selected_tab_without_title_or_prefix_defaults_to_picker(self):
+        changes = {"finally_steps": [], "restore_original_url": False}
+        changes["expected_title"] = None
+        changes["expected_url_prefix"] = None
+        task = dict(self.task)
+        task.update(changes)
+        task.pop("expected_title")
+        task.pop("expected_url_prefix")
+        self.plan.write_text(json.dumps(task))
+        env = dict(os.environ, FAKE_TRACE=str(self.trace), FAKE_MODE="user_selected_arbitrary")
+        result = subprocess.run(
+            [sys.executable, str(RUNNER), "--plan", str(self.plan),
+             "--node", sys.executable, "--mcp-entry", str(self.mock),
+             "--browser-executable", str(self.browser),
+             "--stderr-log", str(self.directory / "stderr.log"),
+             "--approval-timeout", "60", "--step-timeout", "1",
+             "--status-interval", "0.05"],
+            env=env, capture_output=True, text=True, timeout=12,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertIn("tabs_select_0", self.trace.read_text())
+
+    def test_user_selected_multiple_attached_tabs_does_not_guess(self):
+        r, ev, trace = self.run_task({"tab_selection": "user_selected"})
+        self.assertEqual(r.returncode, 1)
+        self.assertFalse(any(line.startswith("tabs_select") for line in trace))
+        self.assertEqual([e for e in ev if e["event"] == "TASK_FAILED"][0]["error_code"],
+                         "approved_tab_missing_or_ambiguous")
+
+    def test_user_selected_crashed_tab_not_accepted(self):
+        r, _, trace = self.run_task({"tab_selection": "user_selected"}, mode="user_selected_crashed")
+        self.assertEqual(r.returncode, 1)
+        self.assertFalse(any(line.startswith("tabs_select") for line in trace))
 
     def test_wrong_title_blocks_before_selection(self):
         r, ev, trace = self.run_task({"expected_title": "Private account"})
