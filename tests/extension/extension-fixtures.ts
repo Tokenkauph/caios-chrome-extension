@@ -212,7 +212,7 @@ async function runCli(
 // The connect page closes itself or becomes the blank tab of the client, which
 // races with the click. Swallow the resulting "Target closed" error.
 export async function clickAllow(connectPage: Page): Promise<void> {
-  await connectPage.getByRole('button', { name: 'Allow' }).click().catch(e => {
+  await connectPage.getByRole('button', { name: /^(?:Allow|Allow selected tabs|Connect blank tab)$/ }).click().catch(e => {
     if (!e?.message?.includes(kTargetClosedErrorMessage))
       throw e;
   });
