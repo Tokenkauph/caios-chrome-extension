@@ -375,7 +375,7 @@ def run(args):
             emit("RESTORE_URL_STATE", category=category)
             return category
 
-        def verify_url(expected, phase, *, exact=False, precheck=False):
+        def verify_url(expected, phase, *, exact=False, precheck=False, attempts_override=None):
             # Only returned MCP errors are safe to recheck; no retry of
             # unanswered or ambiguous mutation calls.
             comparison = ("location.href !== " + json.dumps(expected) if exact
@@ -386,7 +386,7 @@ def run(args):
                         "throw new Error('Document not ready'); return {ready:true};}")
             # One cheap precheck determines whether to restore. Actual
             # restoration gets bounded additional time for DOM to settle.
-            attempts = 1 if precheck else (6 if exact else 3)
+            attempts = attempts_override if attempts_override is not None else (1 if precheck else (6 if exact else 3))
             for attempt in range(attempts):
                 probe_timeout = min(args.step_timeout, 3.0) if exact else None
                 tabs = tabs_from_result(call("browser_tabs", {"action": "list"}, phase,
@@ -438,6 +438,13 @@ def run(args):
                         "relay_websocket_failure", "relay_disconnected"):
                         unknown = True
                     raise
+            if (step["tool"] == "browser_navigate_back"
+                    and step.get("expected_url_prefix") and not recovered):
+                # Browser Back can return before the destination page is ready.
+                # Only poll read-only readiness on the same approved tab; never repeat Back.
+                verify_url(step["expected_url_prefix"], phase + "-confirm-ready",
+                           attempts_override=12)
+                emit("NAVIGATION_ARRIVAL_CONFIRMED", name=name)
             elapsed = round(time.monotonic() - start, 3)
             durations.append({"step": name, "seconds": elapsed, "cleanup": cleanup,
                               "arrival_confirmed_after_error": recovered})

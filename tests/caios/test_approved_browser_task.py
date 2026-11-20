@@ -28,7 +28,7 @@ if mode == "restore_prefix_collision":
     urls[1] = "https://www.google.com/page?item=123"
 titles = {0: "Other account", 1: "Google"}
 history = {0: [], 1: []}
-if mode in ("user_selected_arbitrary", "user_selected_intermediate_back_error"):
+if mode in ("user_selected_arbitrary", "user_selected_intermediate_back_error", "user_selected_back_pending", "user_selected_back_wrong_site"):
     urls = {0: "https://user-chosen.example/path"}
     titles = {0: "User-selected site"}
     history = {0: []}
@@ -159,6 +159,10 @@ for line in sys.stdin:
                 urls[current] += "4"
             if mode == "back_same_origin_redirect":
                 urls[current] = "https://www.google.com/?redirect=1"
+            if mode == "user_selected_back_wrong_site":
+                urls[current] = "https://unexpected.example/"
+            if mode == "user_selected_back_pending":
+                readiness_lag = 3
             if mode == "stale_restore_listing":
                 stale_restore_listing = 2
             if mode == "readiness_lag":
@@ -201,7 +205,8 @@ for line in sys.stdin:
                 expected = json.loads((exact or prefix).group(1))
                 actual = urls[current]
                 correct = actual == expected if exact else actual.startswith(expected)
-                if readiness_lag and actual.startswith("https://www.google.com/"):
+                if readiness_lag and (actual.startswith("https://www.google.com/") or
+                                      (mode == "user_selected_back_pending" and actual.startswith("https://www.msn.com/"))):
                     readiness_lag -= 1
                     correct = False
                 if not correct:
@@ -382,6 +387,54 @@ class ApprovedTaskTests(unittest.TestCase):
         self.assertEqual(trace.count("navigate_back"), 1)
         self.assertNotIn("navigate_https://user-chosen.example/path", trace)
         self.assertNotIn("https://user-chosen.example/path", r.stdout)
+
+    def test_back_success_waits_for_destination_readiness_without_repeating_back(self):
+        steps = [
+            {"name": "first", "tool": "browser_navigate",
+             "arguments": {"url": "https://www.msn.com/"}},
+            {"name": "second", "tool": "browser_navigate",
+             "arguments": {"url": "https://en.wikipedia.org/wiki/European_badger"}},
+            {"name": "back_to_first", "tool": "browser_navigate_back",
+             "arguments": {}, "expected_url_prefix": "https://www.msn.com/"},
+            {"name": "verify", "tool": "browser_evaluate",
+             "arguments": {"function": "read"}},
+        ]
+        r, ev, trace = self.run_task({
+            "tab_selection": "user_selected",
+            "restore_original_url": False,
+            "finally_steps": [],
+            "steps": steps,
+        }, mode="user_selected_back_pending")
+        self.assertEqual(r.returncode, 0, r.stdout)
+        self.assertEqual(trace.count("navigate_back"), 1)
+        self.assertGreaterEqual(trace.count("evaluate"), 6)
+        self.assertEqual(len([e for e in ev if e["event"] == "ACTION_DONE"]), 4)
+        self.assertTrue(any(e["event"] == "NAVIGATION_ARRIVAL_CONFIRMED"
+                            and e["name"] == "back_to_first" for e in ev))
+        self.assertTrue(any(e["event"] == "TASK_COMPLETED" for e in ev))
+
+    def test_back_success_wrong_destination_fails_without_following_actions(self):
+        steps = [
+            {"name": "first", "tool": "browser_navigate",
+             "arguments": {"url": "https://www.msn.com/"}},
+            {"name": "second", "tool": "browser_navigate",
+             "arguments": {"url": "https://en.wikipedia.org/wiki/European_badger"}},
+            {"name": "back_to_first", "tool": "browser_navigate_back",
+             "arguments": {}, "expected_url_prefix": "https://www.msn.com/"},
+            {"name": "must_not_run", "tool": "browser_evaluate",
+             "arguments": {"function": "read"}},
+        ]
+        r, ev, trace = self.run_task({
+            "tab_selection": "user_selected",
+            "restore_original_url": False,
+            "finally_steps": [],
+            "steps": steps,
+        }, mode="user_selected_back_wrong_site")
+        self.assertEqual(r.returncode, 1)
+        self.assertEqual(trace.count("navigate_back"), 1)
+        self.assertEqual(len([e for e in ev if e["event"] == "ACTION_DONE"]), 2)
+        self.assertEqual([e for e in ev if e["event"] == "TASK_FAILED"][0]["error_code"],
+                         "destination_not_confirmed")
 
     def test_wrong_title_blocks_before_selection(self):
         r, ev, trace = self.run_task({"expected_title": "Private account"})
