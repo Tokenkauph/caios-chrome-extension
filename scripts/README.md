@@ -2,6 +2,10 @@
 
 **Scope:** All CAIOS Chrome Extension tasks routed by CAIOS Engineering, in every conversation and on any specifically authorized machine/profile. This is not a conversation-specific benchmark workaround. It reuses existing Chrome/MCP consent; it does not grant access, register a native ChatGPT Tool, or bypass approval.
 
+## Windows onboarding: use the same tested runner
+
+For each additional Windows computer, follow the [single repeatable Windows install and live acceptance guide](../docs/windows-host-install-and-acceptance.md). It covers the versioned complete ZIP, checksum and correct Chrome profile, the CAIOS-specific extension ID, the existing shared runner, public test-tab consent, exact pass markers, cleanup and failure diagnosis. **Do not write a new one-off browser test script for each host.** A host-local Playwright PASS is not evidence that a native ChatGPT browser-control Tool was registered.
+
 ## Mandatory order for every approved browser operation
 
 1. **Before requesting consent**, prepare exact host, Chrome profile, pre-opened target tab, CAIOS extension and matching forked client, complete authorized operation, and cleanup/recovery steps. Finish all unrelated GitHub/docs/Neon checks **before** opening the consent picker.
