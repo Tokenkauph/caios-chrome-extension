@@ -1,0 +1,318 @@
+{
+  "contract_version": "1",
+  "machine": "__TARGET_HOST__",
+  "profile": "__CHROME_PROFILE__",
+  "extension_id": "kanpfbepfgcpmjoeaaihigjkcdjejbld",
+  "tab_selection": "user_selected",
+  "restore_original_url": false,
+  "steps": [
+    {
+      "name": "01_open_msn",
+      "tool": "browser_navigate",
+      "arguments": {
+        "url": "https://www.msn.com/"
+      }
+    },
+    {
+      "name": "02_verify_msn",
+      "tool": "browser_evaluate",
+      "arguments": {
+        "function": "() => {const h=location.hostname.toLowerCase();if(h!=='msn.com'&&!h.endsWith('.msn.com'))throw Error('MSN_SITE_MISMATCH');if(document.readyState==='loading'||!document.body)throw Error('MSN_NOT_READY');return {site:'MSN',ready:true};}"
+      }
+    },
+    {
+      "name": "03_open_wikipedia",
+      "tool": "browser_navigate",
+      "arguments": {
+        "url": "https://en.wikipedia.org/wiki/European_badger"
+      }
+    },
+    {
+      "name": "04_verify_second_website",
+      "tool": "browser_evaluate",
+      "arguments": {
+        "function": "() => {if(location.hostname!=='en.wikipedia.org'||!location.pathname.includes('/wiki/European_badger'))throw Error('WIKIPEDIA_SITE_MISMATCH');const h=(document.querySelector('h1')?.textContent||'').trim().toLowerCase();if(!h.includes('european badger'))throw Error('WIKIPEDIA_ARTICLE_MISSING');return {site:'Wikipedia',article:true};}"
+      }
+    },
+    {
+      "name": "05_back_to_msn",
+      "tool": "browser_navigate_back",
+      "arguments": {},
+      "expected_url_prefix": "https://www.msn.com/"
+    },
+    {
+      "name": "06_verify_return_to_msn",
+      "tool": "browser_evaluate",
+      "arguments": {
+        "function": "() => {const h=location.hostname.toLowerCase();if(h!=='msn.com'&&!h.endsWith('.msn.com'))throw Error('BACK_DID_NOT_RETURN_TO_MSN');if(document.readyState==='loading'||!document.body)throw Error('BACK_PAGE_NOT_READY');return {backToFirstWebsite:true};}"
+      }
+    },
+    {
+      "name": "07_open_selenium_form",
+      "tool": "browser_navigate",
+      "arguments": {
+        "url": "https://www.selenium.dev/selenium/web/web-form.html"
+      }
+    },
+    {
+      "name": "08_inspect_form",
+      "tool": "browser_evaluate",
+      "arguments": {
+        "function": "() => {if(location.hostname!=='www.selenium.dev'||!location.pathname.endsWith('/web-form.html'))throw Error('FORM_WRONG_SITE');const f=document.querySelector('form');if(!f)throw Error('FORM_MISSING');const fields=['my-text','my-password','my-textarea','my-select','my-datalist','my-file','my-date','my-colors','my-range','my-disabled','my-readonly','my-hidden'];for(const name of fields){if(!f.querySelector('[name=\"'+name+'\"]'))throw Error('FORM_FIELD_MISSING_'+name);}if(!f.querySelector('#my-check-1')||!f.querySelector('#my-check-2')||!f.querySelector('#my-radio-1')||!f.querySelector('#my-radio-2'))throw Error('FORM_CHOICES_MISSING');return {form:true,groups:12};}"
+      }
+    },
+    {
+      "name": "09_form_snapshot",
+      "tool": "browser_snapshot",
+      "arguments": {}
+    },
+    {
+      "name": "10_fill_text",
+      "tool": "browser_type",
+      "arguments": {
+        "target": "input[name=\"my-text\"]",
+        "element": "Form text field",
+        "text": "CAIOS standard extension acceptance"
+      }
+    },
+    {
+      "name": "11_fill_password_dummy",
+      "tool": "browser_type",
+      "arguments": {
+        "target": "input[name=\"my-password\"]",
+        "element": "Demo password field",
+        "text": "NOT-A-REAL-PASSWORD"
+      }
+    },
+    {
+      "name": "12_fill_textarea",
+      "tool": "browser_type",
+      "arguments": {
+        "target": "textarea[name=\"my-textarea\"]",
+        "element": "Multiline field",
+        "text": "CAIOS test of multiple lines.\nThis is sample data only."
+      }
+    },
+    {
+      "name": "13_select_option_two",
+      "tool": "browser_select_option",
+      "arguments": {
+        "target": "select[name=\"my-select\"]",
+        "element": "Dropdown selection",
+        "values": [
+          "2"
+        ]
+      }
+    },
+    {
+      "name": "14_fill_datalist",
+      "tool": "browser_type",
+      "arguments": {
+        "target": "input[name=\"my-datalist\"]",
+        "element": "Datalist suggestion",
+        "text": "New York"
+      }
+    },
+    {
+      "name": "15_checkboxes_and_radio",
+      "tool": "browser_fill_form",
+      "arguments": {
+        "fields": [
+          {
+            "name": "Uncheck prechecked checkbox",
+            "type": "checkbox",
+            "target": "#my-check-1",
+            "value": "false"
+          },
+          {
+            "name": "Check unchecked checkbox",
+            "type": "checkbox",
+            "target": "#my-check-2",
+            "value": "true"
+          },
+          {
+            "name": "Choose other radio option",
+            "type": "radio",
+            "target": "#my-radio-2",
+            "value": "true"
+          }
+        ]
+      }
+    },
+    {
+      "name": "16_fill_date",
+      "tool": "browser_type",
+      "arguments": {
+        "target": "input[name=\"my-date\"]",
+        "element": "Date picker",
+        "text": "11/20/2026"
+      }
+    },
+    {
+      "name": "17_set_color",
+      "tool": "browser_evaluate",
+      "arguments": {
+        "function": "() => {const e=document.querySelector('input[name=\"my-colors\"]');if(!e||e.type!=='color')throw Error('COLOR_MISSING');e.value='#12ab34';e.dispatchEvent(new Event('input',{bubbles:true}));e.dispatchEvent(new Event('change',{bubbles:true}));return {color:e.value};}"
+      }
+    },
+    {
+      "name": "18_focus_slider",
+      "tool": "browser_evaluate",
+      "arguments": {
+        "function": "() => {const e=document.querySelector('input[name=\"my-range\"]');if(!e||e.type!=='range')throw Error('SLIDER_MISSING');e.focus();if(document.activeElement!==e)throw Error('SLIDER_FOCUS_FAILED');return {min:e.min,max:e.max};}"
+      }
+    },
+    {
+      "name": "19_slider_home",
+      "tool": "browser_press_key",
+      "arguments": {
+        "key": "Home"
+      }
+    },
+    {
+      "name": "20_slider_min_verify",
+      "tool": "browser_evaluate",
+      "arguments": {
+        "function": "() => {if(document.querySelector('input[name=\"my-range\"]').value!=='0')throw Error('SLIDER_HOME_FAILED');return {min:0};}"
+      }
+    },
+    {
+      "name": "21_slider_end",
+      "tool": "browser_press_key",
+      "arguments": {
+        "key": "End"
+      }
+    },
+    {
+      "name": "22_slider_max_verify",
+      "tool": "browser_evaluate",
+      "arguments": {
+        "function": "() => {if(document.querySelector('input[name=\"my-range\"]').value!=='10')throw Error('SLIDER_END_FAILED');return {max:10};}"
+      }
+    },
+    {
+      "name": "23_open_file_chooser",
+      "tool": "browser_click",
+      "arguments": {
+        "target": "input[name=\"my-file\"]",
+        "element": "File upload field"
+      }
+    },
+    {
+      "name": "24_upload_dummy_file",
+      "tool": "browser_file_upload",
+      "arguments": {
+        "paths": [
+          "caios-install-acceptance-upload.txt"
+        ]
+      }
+    },
+    {
+      "name": "25_commit_datepicker",
+      "tool": "browser_evaluate",
+      "arguments": {
+        "function": "() => {const e=document.querySelector('input[name=\"my-date\"]');if(!e)throw Error('DATE_MISSING');if(window.jQuery&&typeof window.jQuery(e).datepicker==='function')window.jQuery(e).datepicker('setDate','11/20/2026');else e.value='11/20/2026';e.dispatchEvent(new Event('change',{bubbles:true}));return {dateReady:true};}"
+      }
+    },
+    {
+      "name": "26_verify_text",
+      "tool": "browser_evaluate",
+      "arguments": {
+        "function": "() => {const f=document.querySelector('form'); if(!f) throw Error('FORM_MISSING'); const g=n=>f.querySelector('[name=\"'+n+'\"]'); if(!(g('my-text').value==='CAIOS standard extension acceptance'))throw Error('26_VERIFY_TEXT_FAILED');return {verified:true};}"
+      }
+    },
+    {
+      "name": "27_verify_dummy_password",
+      "tool": "browser_evaluate",
+      "arguments": {
+        "function": "() => {const f=document.querySelector('form'); if(!f) throw Error('FORM_MISSING'); const g=n=>f.querySelector('[name=\"'+n+'\"]'); if(!(g('my-password').value==='NOT-A-REAL-PASSWORD'))throw Error('27_VERIFY_DUMMY_PASSWORD_FAILED');return {verified:true};}"
+      }
+    },
+    {
+      "name": "28_verify_textarea",
+      "tool": "browser_evaluate",
+      "arguments": {
+        "function": "() => {const f=document.querySelector('form'); if(!f) throw Error('FORM_MISSING'); const g=n=>f.querySelector('[name=\"'+n+'\"]'); if(!(g('my-textarea').value.includes('This is sample data only.')))throw Error('28_VERIFY_TEXTAREA_FAILED');return {verified:true};}"
+      }
+    },
+    {
+      "name": "29_verify_dropdown",
+      "tool": "browser_evaluate",
+      "arguments": {
+        "function": "() => {const f=document.querySelector('form'); if(!f) throw Error('FORM_MISSING'); const g=n=>f.querySelector('[name=\"'+n+'\"]'); if(!(g('my-select').value==='2'))throw Error('29_VERIFY_DROPDOWN_FAILED');return {verified:true};}"
+      }
+    },
+    {
+      "name": "30_verify_datalist",
+      "tool": "browser_evaluate",
+      "arguments": {
+        "function": "() => {const f=document.querySelector('form'); if(!f) throw Error('FORM_MISSING'); const g=n=>f.querySelector('[name=\"'+n+'\"]'); if(!(g('my-datalist').value==='New York'))throw Error('30_VERIFY_DATALIST_FAILED');return {verified:true};}"
+      }
+    },
+    {
+      "name": "31_verify_checkboxes",
+      "tool": "browser_evaluate",
+      "arguments": {
+        "function": "() => {const f=document.querySelector('form'); if(!f) throw Error('FORM_MISSING'); const g=n=>f.querySelector('[name=\"'+n+'\"]'); if(!(!f.querySelector('#my-check-1').checked&&f.querySelector('#my-check-2').checked))throw Error('31_VERIFY_CHECKBOXES_FAILED');return {verified:true};}"
+      }
+    },
+    {
+      "name": "32_verify_radio",
+      "tool": "browser_evaluate",
+      "arguments": {
+        "function": "() => {const f=document.querySelector('form'); if(!f) throw Error('FORM_MISSING'); const g=n=>f.querySelector('[name=\"'+n+'\"]'); if(!(!f.querySelector('#my-radio-1').checked&&f.querySelector('#my-radio-2').checked))throw Error('32_VERIFY_RADIO_FAILED');return {verified:true};}"
+      }
+    },
+    {
+      "name": "33_verify_date",
+      "tool": "browser_evaluate",
+      "arguments": {
+        "function": "() => {const f=document.querySelector('form'); if(!f) throw Error('FORM_MISSING'); const g=n=>f.querySelector('[name=\"'+n+'\"]'); if(!(g('my-date').value==='11/20/2026'))throw Error('33_VERIFY_DATE_FAILED');return {verified:true};}"
+      }
+    },
+    {
+      "name": "34_verify_color",
+      "tool": "browser_evaluate",
+      "arguments": {
+        "function": "() => {const f=document.querySelector('form'); if(!f) throw Error('FORM_MISSING'); const g=n=>f.querySelector('[name=\"'+n+'\"]'); if(!(g('my-colors').value==='#12ab34'))throw Error('34_VERIFY_COLOR_FAILED');return {verified:true};}"
+      }
+    },
+    {
+      "name": "35_verify_slider",
+      "tool": "browser_evaluate",
+      "arguments": {
+        "function": "() => {const f=document.querySelector('form'); if(!f) throw Error('FORM_MISSING'); const g=n=>f.querySelector('[name=\"'+n+'\"]'); if(!(g('my-range').value==='10'))throw Error('35_VERIFY_SLIDER_FAILED');return {verified:true};}"
+      }
+    },
+    {
+      "name": "36_verify_uploaded_file",
+      "tool": "browser_evaluate",
+      "arguments": {
+        "function": "() => {const f=document.querySelector('form'); if(!f) throw Error('FORM_MISSING'); const g=n=>f.querySelector('[name=\"'+n+'\"]'); if(!(g('my-file').files.length===1&&g('my-file').files[0].name==='caios-install-acceptance-upload.txt'))throw Error('36_VERIFY_UPLOADED_FILE_FAILED');return {verified:true};}"
+      }
+    },
+    {
+      "name": "37_verify_protected_fields",
+      "tool": "browser_evaluate",
+      "arguments": {
+        "function": "() => {const f=document.querySelector('form'); if(!f) throw Error('FORM_MISSING'); const g=n=>f.querySelector('[name=\"'+n+'\"]'); if(!(g('my-disabled').disabled&&g('my-readonly').readOnly&&g('my-readonly').value==='Readonly input'&&g('my-hidden').type==='hidden'))throw Error('37_VERIFY_PROTECTED_FIELDS_FAILED');return {verified:true};}"
+      }
+    },
+    {
+      "name": "38_submit_form",
+      "tool": "browser_click",
+      "arguments": {
+        "target": "button[type=\"submit\"]",
+        "element": "Submit form"
+      }
+    },
+    {
+      "name": "39_verify_received",
+      "tool": "browser_evaluate",
+      "arguments": {
+        "function": "() => {if(location.hostname!=='www.selenium.dev'||!location.pathname.endsWith('/submitted-form.html'))throw Error('FORM_NOT_SUBMITTED');const msg=(document.querySelector('#message')?.textContent||'').trim();if(msg!=='Received!')throw Error('FORM_CONFIRMATION_MISSING');return {submitted:true,confirmation:'Received!'};}"
+      }
+    }
+  ],
+  "finally_steps": []
+}
