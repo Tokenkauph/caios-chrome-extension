@@ -4,6 +4,13 @@
 
 ## Windows onboarding: use the same tested runner
 
+**Verified QUANTUMHAZE Windows acceptance — November 19, 2026 (22:03 ET):** Existing CAIOS v0.5.0.3 / Chrome `Default` profile completed **MCP tab attachment, approved Example Domain (`https://example.com/`) snapshot, navigation to `https://example.org/`, destination snapshot, original URL restore and task-client release (3/3 steps, exit 0, zero cleanup failures)**. [Verified receipt](https://github.com/Tokenkauph/caios/issues/201#issuecomment-7029072376). This does **not** establish a native ChatGPT Tool, unattended startup, or Plex acceptance.
+
+**Source vs deployed state:** The verified Quantum Haze `smoke/run-smoke.ps1` was locally adjusted to select the installed user Python 3.14 binary before Windows Store aliases and save a preflight transcript (`smoke/run-smoke-latest.log`). Its local test JSON was simplified to **snapshot → navigate → snapshot** because a redundant `browser_evaluate` assertion returned an error. **Those locally proven changes are not yet part of the published `v0.5.0.3-smoke.1` ZIP nor this repo's packaged launcher/plan source.** Sync and verify changes before a new release; do not claim the old ZIP was end-to-end accepted. [Windows guide](../docs/windows-host-install-and-acceptance.md).
+
+**Coordination during live use:** Prepare source, task and exact host/profile/tab off-screen. Immediately before an approved short desktop focus interruption, tell the user the exact window and the only tab to approve (**Example Domain**). Execute the prepared launch immediately and verify foreground handle/PID before every typing/Enter action; stop if focus shifted. A desktop-control lease is not consent to surprise the user while they are working or playing. The same controller automatically runs the already-prepared steps after Chrome approval, and releases only the owned session.
+
+
 For each additional Windows computer, follow the [single repeatable Windows install and live acceptance guide](../docs/windows-host-install-and-acceptance.md). It covers the versioned complete ZIP, checksum and correct Chrome profile, the CAIOS-specific extension ID, the existing shared runner, public test-tab consent, exact pass markers, cleanup and failure diagnosis. **Do not write a new one-off browser test script for each host.** A host-local Playwright PASS is not evidence that a native ChatGPT browser-control Tool was registered.
 
 ## Build the reusable Windows release (same runner on every host)
