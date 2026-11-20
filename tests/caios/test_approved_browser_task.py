@@ -36,6 +36,14 @@ elif mode == "user_selected_crashed":
     urls = {0: "https://user-chosen.example/path"}
     titles = {0: "User-selected site"}
     history = {0: []}
+elif mode == "user_selected_blank":
+    urls = {0: "about:blank"}
+    titles = {0: "New Tab"}
+    history = {0: []}
+elif mode == "user_selected_internal":
+    urls = {0: "chrome://newtab/"}
+    titles = {0: "New Tab"}
+    history = {0: []}
 stale_restore_listing = 0
 readiness_lag = 0
 after_navigation = False
@@ -299,6 +307,42 @@ class ApprovedTaskTests(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, result.stdout)
         self.assertIn("tabs_select_0", self.trace.read_text())
+
+    def test_user_selected_about_blank_can_navigate_without_restoration(self):
+        r, events, trace = self.run_task({
+            "tab_selection": "user_selected",
+            "restore_original_url": False,
+            "finally_steps": [],
+        }, mode="user_selected_blank")
+        self.assertEqual(r.returncode, 0, r.stdout)
+        self.assertIn("tabs_select_0", trace)
+        self.assertIn("navigate_https://en.wikipedia.org/wiki/European_badger", trace)
+        self.assertEqual(len([e for e in events if e["event"] == "ACTION_DONE"]), 3)
+        self.assertTrue(any(e["event"] == "TASK_COMPLETED" for e in events))
+        self.assertFalse(any(e["event"] == "ORIGINAL_URL_RESTORED" for e in events))
+
+    def test_user_selected_about_blank_restoration_stays_protected(self):
+        r, events, trace = self.run_task({
+            "tab_selection": "user_selected",
+            "restore_original_url": True,
+            "finally_steps": [],
+        }, mode="user_selected_blank")
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("tabs_select_0", trace)
+        self.assertFalse(any(t.startswith("navigate_") for t in trace))
+        self.assertEqual([e for e in events if e["event"] == "TASK_FAILED"][0]["error_code"],
+                         "original_url_unavailable")
+
+    def test_chrome_internal_tab_requires_picker_conversion(self):
+        r, events, trace = self.run_task({
+            "tab_selection": "user_selected",
+            "restore_original_url": False,
+            "finally_steps": [],
+        }, mode="user_selected_internal")
+        self.assertEqual(r.returncode, 1)
+        self.assertFalse(any(t.startswith("tabs_select") for t in trace))
+        self.assertEqual([e for e in events if e["event"] == "TASK_FAILED"][0]["error_code"],
+                         "approved_tab_missing_or_ambiguous")
 
     def test_user_selected_multiple_attached_tabs_does_not_guess(self):
         r, ev, trace = self.run_task({"tab_selection": "user_selected"})

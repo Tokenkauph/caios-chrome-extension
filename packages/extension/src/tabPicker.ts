@@ -15,7 +15,7 @@
  */
 
 
-import { isDebuggableUrl } from './ownedTab';
+import { isChromeNewTabUrl, isDebuggableUrl } from './ownedTab';
 
 import type { ClientSession } from './clientSession';
 import type { TabGroupManager } from './tabGroupManager';
@@ -42,7 +42,7 @@ export class TabPicker {
         color: group.color,
         tabs: allTabs.filter(tab => tab.groupId === group.id),
       })).filter(group => group.tabs.every(isFree)),
-      tabs: allTabs.filter(tab => isFree(tab) && isDebuggableUrl(tab.url)),
+      tabs: allTabs.filter(tab => isFree(tab) && (isDebuggableUrl(tab.url) || isChromeNewTabUrl(tab.url))),
     };
   }
 
@@ -62,8 +62,18 @@ export class TabPicker {
       await this._groups.adopt(group.id, session);
       return group.tabs;
     }
-    if (selection.tabIds?.length)
-      return await Promise.all(selection.tabIds.map(tabId => chrome.tabs.get(tabId)));
+    if (selection.tabIds?.length) {
+      const tabs = await Promise.all(selection.tabIds.map(tabId => chrome.tabs.get(tabId)));
+      if (tabs.length === 1 && isChromeNewTabUrl(tabs[0].url)) {
+        // Convert only the exact tab the user approved, retaining its Chrome tab ID.
+        // Never permit the debugger to attach to other Chrome-internal pages.
+        const blankTab = await chrome.tabs.update(tabs[0].id!, { url: 'about:blank' });
+        if (!blankTab || blankTab.id !== tabs[0].id)
+          throw new Error('Approved Chrome New Tab could not become an attachable blank tab');
+        return [blankTab];
+      }
+      return tabs;
+    }
     const blankTab = await chrome.tabs.update(connectTabId, { url: 'about:blank' });
     return [blankTab!];
   }

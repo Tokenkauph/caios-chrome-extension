@@ -12,12 +12,16 @@ on:
       - "scripts/package_caios_windows.py"
       - "scripts/windows-smoke/**"
       - "tests/caios/**"
+      - "packages/extension/src/ownedTab.ts"
+      - "packages/extension/src/tabPicker.ts"
   push:
     branches: [main]
     paths:
       - ".github/workflows/caios-r1.yml"
       - "scripts/caios_approved_browser_task.py"
       - "tests/caios/**"
+      - "packages/extension/src/ownedTab.ts"
+      - "packages/extension/src/tabPicker.ts"
   workflow_dispatch:
 
 permissions:
@@ -38,3 +42,8 @@ jobs:
         run: python3 -m py_compile scripts/caios_approved_browser_task.py scripts/package_caios_windows.py tests/caios/test_approved_browser_task.py tests/caios/test_install_acceptance_suite.py tests/caios/test_windows_package.py
       - name: Run browser runner, real-world acceptance plan and ZIP tests
         run: python3 -m unittest discover -s tests/caios -p 'test_*.py' -v
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Verify only consented blank-tab conversion and internal-page protections
+        run: node --no-warnings --test tests/caios/blank-tab-picker.test.mjs tests/caios/tab-picker-blank.test.mjs

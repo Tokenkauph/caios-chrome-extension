@@ -15,6 +15,8 @@ The standardized, packaged Windows implementation is [`windows-smoke/run-accepta
 
 The old `run-smoke.ps1` Example Domain test is **optional troubleshooting**, retained for historical comparison, not the new-install acceptance gate. New bundles include both, and only the full acceptance counts as a complete new-host browser validation.
 
+**Updated blank-tab source behavior (not yet live accepted):** After the user selects the built-in Chrome New Tab, the extension converts that **same** approved tab to `about:blank`. The shared runner parses the blank URL and permits it only when original-URL restoration is disabled. Chrome settings and other internal pages remain excluded; tab consent and unique identity checks are unchanged. This does not retroactively change previously installed packages.
+
 ## Windows onboarding: use the same tested runner
 
 **Verified QUANTUMHAZE Windows acceptance — November 19, 2026 (22:03 ET):** Existing CAIOS v0.5.0.3 / Chrome `Default` profile completed **MCP tab attachment, approved Example Domain (`https://example.com/`) snapshot, navigation to `https://example.org/`, destination snapshot, original URL restore and task-client release (3/3 steps, exit 0, zero cleanup failures)**. [Verified receipt](https://github.com/Tokenkauph/caios/issues/201#issuecomment-7029072376). This does **not** establish a native ChatGPT Tool, unattended startup, or Plex acceptance.

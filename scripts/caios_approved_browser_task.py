@@ -19,7 +19,7 @@ import threading
 import time
 
 
-TAB_LINE = re.compile(r"^\s*-\s*(\d+):\s*(\(current\)\s*)?\[(.*?)\]\((https?://[^)]*)\)(?:\s+\[crashed\])?(?:\s+\[isolatedContext:.*?\])?\s*$")
+TAB_LINE = re.compile(r"^\s*-\s*(\d+):\s*(\(current\)\s*)?\[(.*?)\]\((https?://[^)]*|about:blank)\)(?:\s+\[crashed\])?(?:\s+\[isolatedContext:.*?\])?\s*$")
 
 
 def emit(event: str, **details):
@@ -330,7 +330,10 @@ def run(args):
                 live_url = json.loads(values[0].strip())
             except (ValueError, TypeError):
                 raise MCPFault("original_url_unavailable", "capture-original-url") from None
-            if not isinstance(live_url, str) or not live_url.startswith(("https://", "http://")):
+            allowed_blank = (plan["tab_selection"] == "user_selected"
+                             and not plan.get("restore_original_url")
+                             and live_url == "about:blank")
+            if not isinstance(live_url, str) or not (live_url.startswith(("https://", "http://")) or allowed_blank):
                 raise MCPFault("original_url_unavailable", "capture-original-url")
             if (plan["tab_selection"] == "pinned"
                     and not live_url.startswith(plan["expected_url_prefix"])):
